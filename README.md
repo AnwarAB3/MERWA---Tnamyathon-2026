@@ -111,6 +111,38 @@ desert), so a green pivot never reads as "mostly idle". Screenshots in
 > cloud-masked), NDVI in upload mode = recovered from the user's NDVI composite,
 > the FAO-56 chain = modelled, applied-water/waste = estimate (no field meter).
 
+## Deploy it and share a QR (slide 6 backup)
+
+This `mirwa/` folder is a self-contained, deploy-ready app (bundled sample field
+in `data/`, `requirements.txt`, git repo on branch `main`).
+
+**Streamlit Community Cloud — free, permanent URL:**
+1. Create a **public** GitHub repo (e.g. `mirwa`), then push this folder:
+   ```bash
+   cd mirwa
+   git remote add origin https://github.com/<your-username>/mirwa.git
+   git push -u origin main
+   ```
+2. Go to https://share.streamlit.io → sign in with GitHub → **Create app** →
+   pick the repo, branch `main`, main file `app.py` → **Deploy**.
+3. Build takes ~3–5 min (installs `rasterio` etc.). You get a URL like
+   `https://<name>.streamlit.app`.
+
+**Make the QR:**
+```bash
+python mirwa/make_qr.py https://<your-app>.streamlit.app
+```
+→ saves `mirwa/screenshots/app_qr.png` for the slide.
+
+**Temporary share for demo day** (URL changes each run): run `streamlit run
+mirwa/app.py`, then in another terminal `cloudflared tunnel --url
+http://localhost:8501` for a public link.
+
+Notes: the free tier is ~1 GB RAM; the main app is light (the year-long
+time-series behind a checkbox is the only heavy call). Your deck and handoff are
+NOT in this folder, so they stay private. If `rasterio` ever fails to build on
+the cloud, coordinate mode falls back to the VARI estimate automatically.
+
 ### Earlier static prototype — `mirwa/frontend/index.html`
 A self-contained HTML version of the decision screen (Leaflet + JS FAO-56 engine,
 live NASA POWER). Kept as a lightweight alternative; run with
