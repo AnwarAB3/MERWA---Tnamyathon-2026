@@ -1,0 +1,79 @@
+{
+  "field": {
+    "lat": 21.212,
+    "lon": 39.6643,
+    "place": "Makkah region (low coastal, ~45 m)",
+    "elevation_m": 45.3,
+    "area_ha": 50.0,
+    "area_note": "representative pivot area; use drawn boundary in production"
+  },
+  "satellite_ndvi": {
+    "source": "Sentinel-2 NDVI composite (proxy recovered from colour ramp; production uses raw B4/B8: NDVI=(B8-B4)/(B8+B4))",
+    "active_crop_mean_ndvi": 0.584,
+    "scene_active_crop_pct": 49.5,
+    "scene_bare_fallow_pct": 31.4,
+    "scene_sparse_other_pct": 19.1,
+    "idle_land_note": "scene-level bare/fallow share (fully-tan pivots + harvested sectors); per-field idle area needs the field boundary"
+  },
+  "et0_measured": {
+    "mm_day": 5.69,
+    "range_mm_day": [
+      5.04,
+      6.53
+    ],
+    "window": "20261004..20261102 (30 days)",
+    "tmean_c": 32.2,
+    "rh_pct": 59.0,
+    "label": "measured/reanalysis (NASA POWER)"
+  },
+  "water_demand_modelled": {
+    "kc": 0.737,
+    "etc_mm_day": 4.19,
+    "etc_mm_week": 29.3,
+    "weekly_demand_m3": 14657,
+    "weekly_demand_m3_per_ha": 293,
+    "sensitivity": {
+      "ndvi0.45_sparse_m3_wk": 10746,
+      "ndvi0.75_vigorous_m3_wk": 19502
+    },
+    "label": "modelled (NDVI->Kc->ETc, FAO-56)"
+  },
+  "waste_estimate": {
+    "method": "gross applied = net demand / irrigation efficiency",
+    "efficiency_now_pct": 50,
+    "best_practice_pct": 85,
+    "est_applied_now_m3_wk": 29314,
+    "est_applied_best_m3_wk": 17243,
+    "avoidable_m3_wk": 12070,
+    "avoidable_pct_of_applied": 41.2,
+    "label": "ESTIMATE — no field flow-meter; efficiency figure indicative"
+  },
+  "citations": {
+    "ag_share_water": {
+      "value_pct": 84,
+      "text": "Agriculture = 84% of KSA total water requirements; non-renewable groundwater = 90% of water supplied to agriculture.",
+      "source": "Ministry of Environment, Water & Agriculture (MEWA), Water Agency."
+    },
+    "ag_water_volume_2023": {
+      "value_mm3_yr": 12298,
+      "nonrenewable_mm3_yr": 9356,
+      "text": "Agriculture used 12,298 million m3 in 2023 (largest consumer); non-renewable groundwater use 9,356 million m3 (-7% vs 2022).",
+      "source": "GASTAT Water Accounts 2023 (via Arab News, 2024)."
+    },
+    "irrigation_efficiency": {
+      "value_pct": 50,
+      "best_practice_pct": 85,
+      "text": "Irrigation often ~50% efficient vs ~85% global best practice (indicative, non-official — flag as unverified).",
+      "source": "FEWS NET, Kingdom of Saudi Arabia country page."
+    },
+    "ndvi_kc": {
+      "text": "NDVI->Kcb via fraction-of-cover (SIMS); Kcb_full=1.10, NDVI_min=0.15, NDVI_max=0.90.",
+      "source": "Allen & Pereira (2009); Calera et al. (2017); FAO-56."
+    },
+    "et0": {
+      "text": "ET0 = FAO-56 Penman-Monteith from NASA POWER daily reanalysis meteorology (observational, NOT a forecast).",
+      "source": "Allen et al. (1998) FAO-56; NASA POWER (power.larc.nasa.gov)."
+    }
+  },
+  "generated": "2026-11-11T21:58:19"
+}

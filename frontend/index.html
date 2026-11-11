@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مرواء — النموذج الأولي</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#001D5A; --navy2:#0b2e73; --orange:#C1551C; --orange2:#e2762f;
+    --green:#2f9e44; --green-d:#1f7a33; --blue:#1565c0; --bg:#eef2f7;
+    --card:#ffffff; --line:#d8e0ea; --ink:#0f1f3d; --muted:#5a6b85;
+    --measured:#1565c0; --modelled:#2f9e44; --estimate:#C1551C;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Cairo',system-ui,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink)}
+  .wrap{max-width:1180px;margin:0 auto;padding:16px}
+  /* top bar */
+  header{display:flex;align-items:center;gap:14px;background:linear-gradient(110deg,var(--navy),var(--navy2));
+    color:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 8px 24px rgba(0,29,90,.18)}
+  .logo{width:46px;height:46px;border-radius:12px;background:var(--orange);display:grid;place-items:center;
+    font-weight:900;font-size:24px;color:#fff;box-shadow:0 2px 8px rgba(193,85,28,.5)}
+  header h1{margin:0;font-size:22px;font-weight:900;letter-spacing:.5px}
+  header p{margin:2px 0 0;font-size:13px;opacity:.85;font-weight:400}
+  .badge{margin-inline-start:auto;font-size:12px;background:rgba(255,255,255,.14);padding:6px 12px;border-radius:999px;font-weight:600}
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:16px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(15,31,61,.05)}
+  .panel h2{margin:0 0 12px;font-size:15px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:8px}
+  .panel h2 .n{width:22px;height:22px;border-radius:7px;background:var(--navy);color:#fff;display:grid;place-items:center;font-size:12px}
+  /* map */
+  #map{height:260px;border-radius:12px;border:1px solid var(--line);z-index:0}
+  .field-form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .field-form .full{grid-column:1/-1}
+  label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px}
+  input[type=text],input[type=number]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;
+    font-family:inherit;font-size:14px;background:#fbfcfe}
+  input:focus{outline:2px solid var(--navy);border-color:var(--navy)}
+  .slider-row{display:flex;align-items:center;gap:10px}
+  input[type=range]{flex:1;accent-color:var(--green)}
+  .stageval{font-weight:800;color:var(--green-d);font-size:14px;min-width:42px;text-align:center}
+  .btn{grid-column:1/-1;margin-top:4px;background:var(--orange);color:#fff;border:0;border-radius:11px;
+    padding:12px;font-family:inherit;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 4px 12px rgba(193,85,28,.3)}
+  .btn:hover{background:var(--orange2)}
+  .btn.ghost{background:#eef2f7;color:var(--navy);box-shadow:none;border:1px solid var(--line)}
+  .live{font-size:11.5px;color:var(--muted);margin-top:8px;text-align:center}
+  .live b{color:var(--green-d)}
+  /* report hero */
+  .hero{background:linear-gradient(120deg,#073b7a,#0a52a8);color:#fff;border-radius:14px;padding:18px 20px;margin-bottom:14px;position:relative;overflow:hidden}
+  .hero .lbl{font-size:13px;opacity:.9;font-weight:600}
+  .hero .big{font-size:40px;font-weight:900;line-height:1.05;margin:4px 0}
+  .hero .big span{font-size:18px;font-weight:700;opacity:.9}
+  .hero .sub{font-size:12.5px;opacity:.85}
+  .hero .drop{position:absolute;inset-inline-start:-20px;top:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.06)}
+  /* metric cards */
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .m{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:#fbfcfe}
+  .m .k{font-size:11.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+  .m .v{font-size:21px;font-weight:900;margin-top:3px}
+  .m .u{font-size:12px;font-weight:600;color:var(--muted)}
+  .m.waste{background:#fff6f0;border-color:#f3d2bd}
+  .m.waste .v{color:var(--orange)}
+  .m.idle{background:#fffcf0;border-color:#f0e6bd}
+  .tag{font-size:9.5px;font-weight:800;padding:1.5px 6px;border-radius:999px;color:#fff;letter-spacing:.3px}
+  .t-measured{background:var(--measured)} .t-modelled{background:var(--modelled)} .t-estimate{background:var(--estimate)}
+  /* imagery */
+  .imagery{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .imagery figure{margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#000}
+  .imagery img{width:100%;height:150px;object-fit:cover;display:block}
+  .imagery figcaption{font-size:11.5px;color:var(--muted);padding:7px 10px;background:#fbfcfe;font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;font-size:11px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+  /* footer */
+  .foot{margin-top:16px;font-size:11.5px;color:var(--muted);line-height:1.7}
+  .foot .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+  .chip{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-weight:600}
+  .cite{border-top:1px dashed var(--line);padding-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">م</div>
+    <div>
+      <h1>مِرواء</h1>
+      <p>تقدير الاحتياج المائي الأسبوعي لكل حقل من صور الأقمار الاصطناعية — وفق منهجية FAO‑56</p>
+    </div>
+    <div class="badge">نموذج أولي · منطقة مكة المكرمة</div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT (RTL first): field selection -->
+    <section class="panel">
+      <h2><span class="n">١</span> اختر الحقل</h2>
+      <div id="map"></div>
+      <div class="field-form">
+        <div><label>خط العرض (Lat)</label><input type="text" id="lat" value="21.2120"></div>
+        <div><label>خط الطول (Lon)</label><input type="text" id="lon" value="39.6643"></div>
+        <div><label>مساحة المحور (هكتار)</label><input type="number" id="area" value="50" min="1" step="1"></div>
+        <div>
+          <label>مرحلة نمو المحصول · NDVI</label>
+          <div class="slider-row">
+            <input type="range" id="ndvi" min="0.20" max="0.85" step="0.002" value="0.584">
+            <span class="stageval" id="ndvival">0.58</span>
+          </div>
+        </div>
+        <button class="btn full" id="analyze">تحليل الحقل · سحب بيانات مباشرة</button>
+        <button class="btn ghost full" id="reset">إعادة تعيين على حقل العيّنة</button>
+      </div>
+      <div class="live" id="livestatus">المصدر: آخر تشغيل محفوظ (ET₀ من NASA POWER، ٣٠ يومًا).</div>
+    </section>
+
+    <!-- RIGHT: the decision report -->
+    <section class="panel">
+      <h2><span class="n">٢</span> التقرير — قرار الري لهذا الأسبوع</h2>
+
+      <div class="hero">
+        <div class="drop"></div>
+        <div class="lbl">يحتاج هذا الحقل هذا الأسبوع</div>
+        <div class="big" id="weekm3">14,700 <span>م³</span></div>
+        <div class="sub" id="herosub">≈ 293 م³/هكتار · ETc ‎4.19‎ مم/يوم × ‎7‎ أيام</div>
+      </div>
+
+      <div class="metrics">
+        <div class="m">
+          <div class="k">ET₀ المرجعي <span class="tag t-measured">مقياس</span></div>
+          <div class="v" id="et0">5.69 <span class="u">مم/يوم</span></div>
+        </div>
+        <div class="m">
+          <div class="k">مؤشر الغطاء NDVI <span class="tag t-measured">قمر صناعي</span></div>
+          <div class="v" id="ndvicard">0.58</div>
+        </div>
+        <div class="m">
+          <div class="k">معامل المحصول Kc <span class="tag t-modelled">محسوب</span></div>
+          <div class="v" id="kc">0.74</div>
+        </div>
+        <div class="m">
+          <div class="k">ETc الاحتياج <span class="tag t-modelled">محسوب</span></div>
+          <div class="v" id="etcweek">29.3 <span class="u">مم/أسبوع</span></div>
+        </div>
+        <div class="m waste">
+          <div class="k">هدر يمكن تفاديه <span class="tag t-estimate">تقدير</span></div>
+          <div class="v" id="waste">12,100 <span class="u">م³/أسبوع</span></div>
+          <div class="u" id="wastepct">≈ 41٪ من المطبّق (كفاءة ٥٠٪→٨٥٪)</div>
+        </div>
+        <div class="m idle">
+          <div class="k">أرض بور/مراحة في المشهد <span class="tag t-measured">قمر صناعي</span></div>
+          <div class="v" id="idle">31٪</div>
+          <div class="u">قابلة لإعادة الاستخدام ضمن حدٍّ مائي</div>
+        </div>
+      </div>
+
+      <div class="imagery">
+        <figure><img src="truecolor.jpg" alt="صورة حقيقية"><figcaption>Sentinel‑2 · لون حقيقي</figcaption></figure>
+        <figure><img src="ndvi_classified.png" alt="تصنيف NDVI"><figcaption>تصنيف NDVI (محسوب)</figcaption></figure>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:#318c46"></i> محصول نشِط (NDVI≥0.45)</span>
+        <span><i class="sw" style="background:#f2dd6e"></i> غطاء ضعيف</span>
+        <span><i class="sw" style="background:#d6c791"></i> بور/مراحة</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <div class="chips">
+      <span class="chip"><span class="tag t-measured">مقياس</span> ET₀ وNDVI من مصادر رصدية</span>
+      <span class="chip"><span class="tag t-modelled">محسوب</span> سلسلة FAO‑56</span>
+      <span class="chip"><span class="tag t-estimate">تقدير</span> الاستهلاك/الهدر بلا عدّاد ميداني</span>
+    </div>
+    <div class="cite">
+      <b>المنهجية والمصادر:</b> NDVI → Kc (طريقة كسر الغطاء، Allen &amp; Pereira 2009؛ Calera 2017) →
+      ET₀ (FAO‑56 Penman‑Monteith من NASA POWER، بيانات رصدية لا تنبؤية) → ETc = Kc × ET₀.
+      الاحتياج = ETc × المساحة. الهدر = المطبّق المقدَّر − الاحتياج (كفاءة الري ~٥٠٪، FEWS NET، مؤشّري).
+      NDVI في هذا النموذج مُشتقّ من مركّب Sentinel‑2 الجاهز؛ الإنتاج يحسبه من النطاقات الخام B4/B8.
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ===== FAO-56 engine (ported 1:1 from the Python backend) ===== */
+const KCB_FULL=1.10, NDVI_MIN=0.15, NDVI_MAX=0.90, KE=0.10, EFF=0.50, BEST=0.85;
+const svp=t=>0.6108*Math.exp(17.27*t/(t+237.3));
+function ra(lat,doy){const phi=lat*Math.PI/180,dr=1+0.033*Math.cos(2*Math.PI/365*doy),
+  dec=0.409*Math.sin(2*Math.PI/365*doy-1.39),
+  ws=Math.acos(Math.max(-1,Math.min(1,-Math.tan(phi)*Math.tan(dec))));
+  return 24*60/Math.PI*0.0820*dr*(ws*Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.sin(ws));}
+function et0day(tmax,tmin,rh,u2,rs,ps,lat,elev,doy){
+  const tm=(tmax+tmin)/2, es=(svp(tmax)+svp(tmin))/2, ea=rh/100*es,
+    d=4098*svp(tm)/Math.pow(tm+237.3,2), g=0.000665*ps,
+    Ra=ra(lat,doy), rso=(0.75+2e-5*elev)*Ra, rns=0.77*rs, sig=4.903e-9,
+    cloud=rso>0?1.35*Math.min(rs/rso,1)-0.35:0.05,
+    rnl=sig*((Math.pow(tmax+273.16,4)+Math.pow(tmin+273.16,4))/2)*(0.34-0.14*Math.sqrt(ea))*cloud,
+    rn=rns-rnl;
+  return Math.max(0,(0.408*d*rn+g*(900/(tm+273))*u2*(es-ea))/(d+g*(1+0.34*u2)));
+}
+const kcb=n=>KCB_FULL*Math.max(0,Math.min(1,(n-NDVI_MIN)/(NDVI_MAX-NDVI_MIN)));
+const kc=n=>kcb(n)+KE;
+function compute(ndvi,et0,areaHa){
+  const k=kc(ndvi), etcDay=k*et0, etcWeek=etcDay*7, m3=etcWeek/1000*areaHa*10000,
+    net=m3, appliedNow=net/EFF, appliedBest=net/BEST, avoid=appliedNow-appliedBest,
+    avoidPct=(1-EFF/BEST)*100;
+  return {k,etcDay,etcWeek,m3,perHa:m3/areaHa,avoid,avoidPct};
+}
+const nf=x=>Math.round(x).toLocaleString('en-US');
+
+/* baked sample-field run (always-available fallback) */
+const SAMPLE={lat:21.2120,lon:39.6643,elev:45.3,area:50,et0:5.69,ndvi:0.584,
+  idlePct:31.4,activePct:49.5};
+let state={...SAMPLE};
+
+function render(){
+  const r=compute(state.ndvi,state.et0,state.area);
+  document.getElementById('weekm3').innerHTML=`${nf(r.m3)} <span>م³</span>`;
+  document.getElementById('herosub').textContent=
+    `≈ ${nf(r.perHa)} م³/هكتار · ETc ${r.etcDay.toFixed(2)} مم/يوم × 7 أيام`;
+  document.getElementById('et0').innerHTML=`${state.et0.toFixed(2)} <span class="u">مم/يوم</span>`;
+  document.getElementById('ndvicard').textContent=state.ndvi.toFixed(2);
+  document.getElementById('kc').textContent=r.k.toFixed(2);
+  document.getElementById('etcweek').innerHTML=`${r.etcWeek.toFixed(1)} <span class="u">مم/أسبوع</span>`;
+  document.getElementById('waste').innerHTML=`${nf(r.avoid)} <span class="u">م³/أسبوع</span>`;
+  document.getElementById('wastepct').textContent=`≈ ${r.avoidPct.toFixed(0)}٪ من المطبّق (كفاءة ٥٠٪→٨٥٪)`;
+  document.getElementById('idle').textContent=`${state.idlePct.toFixed(0)}٪`;
+  document.getElementById('ndvival').textContent=state.ndvi.toFixed(2);
+}
+
+/* ===== map (satellite image overlay of the field + pivot circle) ===== */
+let map,circle,marker;
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([state.lat,state.lon],13);
+  const b=[[state.lat-0.028,state.lon-0.030],[state.lat+0.028,state.lon+0.030]];
+  L.imageOverlay('truecolor.jpg',b,{opacity:1}).addTo(map);
+  marker=L.circleMarker([state.lat,state.lon],{radius:6,color:'#fff',weight:2,fillColor:'#C1551C',fillOpacity:1}).addTo(map);
+  circle=L.circle([state.lat,state.lon],{radius:Math.sqrt(state.area*10000/Math.PI),
+    color:'#ffd400',weight:2,fill:false,dashArray:'6 6'}).addTo(map);
+}
+function updateMap(){
+  map.setView([state.lat,state.lon]);
+  marker.setLatLng([state.lat,state.lon]);
+  circle.setLatLng([state.lat,state.lon]).setRadius(Math.sqrt(state.area*10000/Math.PI));
+}
+
+/* ===== live NASA POWER fetch (observational, not forecast) ===== */
+async function fetchET0(lat,lon){
+  const d=new Date(); d.setDate(d.getDate()-9);
+  const e=d.toISOString().slice(0,10).replace(/-/g,'');
+  const s0=new Date(d); s0.setDate(s0.getDate()-29);
+  const s=s0.toISOString().slice(0,10).replace(/-/g,'');
+  const p='T2M_MAX,T2M_MIN,RH2M,WS2M,ALLSKY_SFC_SW_DWN,PS';
+  const url=`https://power.larc.nasa.gov/api/temporal/daily/point?parameters=${p}&community=AG&longitude=${lon}&latitude=${lat}&start=${s}&end=${e}&format=JSON`;
+  const j=await (await fetch(url)).json();
+  const elev=j.geometry.coordinates[2], pp=j.properties.parameter, days=Object.keys(pp.T2M_MAX);
+  let sum=0,n=0;
+  for(const day of days){
+    const tx=pp.T2M_MAX[day],tn=pp.T2M_MIN[day],rh=pp.RH2M[day],u2=pp.WS2M[day],rs=pp.ALLSKY_SFC_SW_DWN[day],ps=pp.PS[day];
+    if([tx,tn,rh,u2,rs,ps].some(v=>v<=-900))continue;
+    const doy=Math.floor((Date.UTC(day.slice(0,4),+day.slice(4,6)-1,day.slice(6,8))-Date.UTC(day.slice(0,4),0,0))/864e5);
+    sum+=et0day(tx,tn,rh,u2,rs,ps,lat,elev,doy); n++;
+  }
+  return {et0:sum/n,elev,n};
+}
+
+/* ===== events ===== */
+document.getElementById('ndvi').addEventListener('input',e=>{state.ndvi=+e.target.value;render();});
+document.getElementById('area').addEventListener('input',e=>{state.area=Math.max(1,+e.target.value||1);updateMap();render();});
+document.getElementById('reset').addEventListener('click',()=>{
+  state={...SAMPLE};
+  document.getElementById('lat').value=state.lat;document.getElementById('lon').value=state.lon;
+  document.getElementById('area').value=state.area;document.getElementById('ndvi').value=state.ndvi;
+  document.getElementById('livestatus').innerHTML='المصدر: آخر تشغيل محفوظ (ET₀ من NASA POWER، ٣٠ يومًا).';
+  updateMap();render();
+});
+document.getElementById('analyze').addEventListener('click',async()=>{
+  const lat=parseFloat(document.getElementById('lat').value),lon=parseFloat(document.getElementById('lon').value);
+  const st=document.getElementById('livestatus');
+  if(isNaN(lat)||isNaN(lon)){st.textContent='إحداثيات غير صحيحة.';return;}
+  state.lat=lat;state.lon=lon;state.area=Math.max(1,+document.getElementById('area').value||1);
+  updateMap();
+  st.innerHTML='⏳ جارٍ سحب بيانات NASA POWER المباشرة…';
+  try{
+    const {et0,elev,n}=await fetchET0(lat,lon);
+    if(!isFinite(et0)||n===0)throw new Error('no data');
+    state.et0=et0;state.elev=elev;
+    st.innerHTML=`<b>✓ مباشر:</b> ET₀ = ${et0.toFixed(2)} مم/يوم (NASA POWER، ${n} يومًا · ارتفاع ${elev.toFixed(0)} م).`;
+  }catch(err){
+    st.innerHTML='⚠ تعذّر الاتصال المباشر — عرض ET₀ لآخر تشغيل محفوظ (5.69 مم/يوم).';
+  }
+  render();
+});
+
+initMap();render();
+</script>
+</body>
+</html>

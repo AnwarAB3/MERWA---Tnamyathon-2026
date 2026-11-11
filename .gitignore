@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+backend/_uploaded_ndvi.png
+.streamlit/secrets.toml
+.DS_Store
