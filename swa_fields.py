@@ -21,15 +21,11 @@ OUT = Path(__file__).resolve().parent / "screenshots" / "swa"
 OUT.mkdir(parents=True, exist_ok=True)
 EFF, BEST = 0.50, 0.85
 
-# Real Makkah-region farming areas + a declared crop per field.
+# Only the fields the user actually provided (coordinate + crop). No invented sites.
 FIELDS = [
-    dict(id="f1", name="مزرعة الساحل", lat=21.2120, lon=39.6643, area=50, crop="tomato"),
-    dict(id="f2", name="حقول الخرمة",  lat=21.9200, lon=42.0500, area=65, crop="alfalfa"),
-    dict(id="f3", name="مزارع تربة",   lat=21.2100, lon=41.6300, area=55, crop="sorghum"),
-    dict(id="f4", name="مرتفعات الطائف", lat=21.2700, lon=40.4200, area=30, crop="grape"),
-    dict(id="f5", name="واحة رنية",    lat=21.2700, lon=42.8500, area=45, crop="date"),
-    dict(id="f6", name="مزرعة بابايا الليث", lat=20.5833, lon=40.4932, area=20, crop="papaya"),
-    dict(id="f7", name="مزرعة نخيل رهاط",   lat=22.0788, lon=40.0282, area=40, crop="date"),
+    dict(id="f1", name="مزرعة الساحل",       lat=21.2120, lon=39.6643, area=50, crop="tomato"),
+    dict(id="f2", name="مزرعة بابايا الليث", lat=20.5833, lon=40.4932, area=20, crop="papaya"),
+    dict(id="f3", name="مزرعة نخيل رهاط",     lat=22.0788, lon=40.0282, area=40, crop="date"),
 ]
 
 

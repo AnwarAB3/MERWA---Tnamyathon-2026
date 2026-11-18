@@ -1,0 +1,263 @@
+<title>مراقبة الحقول الجوفية</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: SWA monitoring — aggregate KPIs, a grid of field cards (crop icon on each
+   satellite image), consumptive-use chart, ranked table and a groundwater panel. RTL. */
+:root{
+  --bg:#eef3ec; --surface:#ffffff; --surface-2:#f5f8f3; --ink:#15241b; --muted:#687a6e;
+  --line:#e2e9df; --green:#1f7a3f; --green-2:#2f9e55; --lime:#8fcf49; --sky:#2b7fd0;
+  --hero-ink:#fff; --good:#2f9e55; --warn:#d98a2b; --crit:#cf4f45;
+  --shadow:0 1px 2px rgba(20,40,28,.04),0 10px 30px rgba(20,40,28,.06); --r:18px;
+  --fdisplay:"Space Grotesk","Cairo",system-ui,sans-serif;
+  --fbody:"Cairo",system-ui,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1712; --surface:#15231a; --surface-2:#1a2a20; --ink:#e9f1e9; --muted:#9bb0a2;
+  --line:#243528; --green:#4bbf6e; --green-2:#5fcf7f; --lime:#9ad549; --sky:#5aa6e8;
+  --good:#5fcf7f; --warn:#e6a94a; --crit:#e06a60;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 34px rgba(0,0,0,.4); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0e1712; --surface:#15231a; --surface-2:#1a2a20; --ink:#e9f1e9; --muted:#9bb0a2;
+  --line:#243528; --green:#4bbf6e; --green-2:#5fcf7f; --lime:#9ad549; --sky:#5aa6e8;
+  --good:#5fcf7f; --warn:#e6a94a; --crit:#e06a60;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 34px rgba(0,0,0,.4); color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--fbody);direction:rtl;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;text-wrap:balance}
+.num{font-family:var(--fdisplay);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.shell{display:grid;grid-template-columns:72px 1fr;min-height:100%}
+.rail{position:sticky;top:env(safe-area-inset-top,0);align-self:start;height:100vh;
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;
+  background:var(--surface);border-inline-start:1px solid var(--line)}
+.logo{width:40px;height:40px;border-radius:12px;background:var(--green);display:grid;place-items:center;
+  color:#fff;font-weight:900;font-size:20px;margin-bottom:10px}
+.nav{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.nav:hover{background:var(--surface-2);color:var(--ink)}
+.nav.active{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.nav svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.rail .spacer{flex:1}
+.main{padding:22px max(16px,env(safe-area-inset-right,0)) 40px max(16px,env(safe-area-inset-left,0));min-width:0}
+.topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.topbar .hi{font-size:12.5px;color:var(--muted);font-weight:600}
+.topbar h1{font-size:22px;font-weight:800}
+.spC{flex:1}
+.pill{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;cursor:pointer;font-family:inherit;font-weight:700;
+  border-radius:999px;padding:10px 16px;font-size:13.5px}
+.btn.primary{background:var(--green);color:#fff}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8}
+
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow)}
+.kpi .k{font-size:12px;color:var(--muted);font-weight:700}
+.kpi .v{font-size:27px;font-weight:800;margin-top:4px}
+.kpi .v small{font-size:13px;color:var(--muted);font-weight:700}
+.kpi .d{font-size:11px;font-weight:700;margin-top:3px}
+.kpi .d.good{color:var(--good)} .kpi .d.warn{color:var(--warn)} .kpi .d.crit{color:var(--crit)}
+
+.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:0}
+.card .pad{padding:18px}
+.ctitle{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ctitle h3{font-size:15px;font-weight:800}
+.ctitle .sub{font-size:11.5px;color:var(--muted);font-weight:600}
+
+/* field cards */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.fcard{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+.thumb{position:relative;height:120px;background:#2a3a2a center/cover no-repeat}
+.thumb .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,12,.1),rgba(8,20,12,.55))}
+.cropbadge{position:absolute;top:9px;inset-inline-start:9px;z-index:2;display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.92);border-radius:999px;padding:3px 10px 3px 4px;font-size:11.5px;font-weight:800;color:#15241b}
+.cropbadge .ic{width:24px;height:24px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.cropbadge .ic svg{width:19px;height:19px}
+.sdot{position:absolute;top:11px;inset-inline-end:11px;z-index:2;width:11px;height:11px;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.sdot.over{background:var(--crit)} .sdot.ok{background:var(--good)} .sdot.idle{background:var(--muted)}
+.finfo{padding:12px 14px}
+.finfo .fname{font-size:14.5px;font-weight:800}
+.finfo .fplace{font-size:11px;color:var(--muted);font-weight:600;margin-top:1px}
+.frow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+.frow .k{font-size:10px;color:var(--muted);font-weight:700}
+.frow .v{font-size:13.5px;font-weight:800;margin-top:1px}
+.wbar{height:6px;border-radius:4px;background:var(--surface-2);margin-top:11px;overflow:hidden}
+.wbar i{display:block;height:100%;border-radius:4px;background:var(--warn)}
+.wbartxt{font-size:10.5px;color:var(--muted);font-weight:700;margin-top:5px}
+
+/* chart + table */
+#bars{width:100%;height:auto;display:block;direction:ltr}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th,.tbl td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line)}
+.tbl th{font-size:11px;color:var(--muted);font-weight:700}
+.tbl td .num{font-weight:800}
+.tag{font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;color:#fff}
+
+/* groundwater */
+.gw{grid-column:1 / -1;background:linear-gradient(100deg,#0b3d6b,#135089);color:#fff;border:0}
+.gw .pad{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.gw .g .k{font-size:12px;opacity:.82;font-weight:600}
+.gw .g .v{font-size:24px;font-weight:800;margin-top:3px}
+.gw .g .s{font-size:11px;opacity:.8;margin-top:2px}
+.foot{margin-top:20px;font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.8}
+.foot b{color:var(--ink)}
+
+@media (max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.gw .pad{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){
+  .shell{grid-template-columns:1fr}
+  .rail{flex-direction:row;height:auto;width:100%;position:sticky;top:0;z-index:20;border-inline-start:0;border-bottom:1px solid var(--line);padding:10px 12px}
+  .rail .logo{margin-bottom:0}
+}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="logo">م</div>
+    <div class="nav active" title="المراقبة"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></div>
+    <div class="nav" title="الحقول"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20V9l7-5 7 5v11"/></svg></div>
+    <div class="nav" title="المياه"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></div>
+    <div class="nav" title="التقارير"><svg viewBox="0 0 24 24"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div>
+    <div class="spacer"></div>
+    <div class="nav" id="themeBtn" title="الوضع"><svg viewBox="0 0 24 24"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8z"/></svg></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="hi">الهيئة السعودية للمياه · مراقبة السحب الجوفي</div>
+        <h1>مراقبة الحقول المرويّة من المياه الجوفية</h1>
+      </div>
+      <div class="pill">منطقة مكة المكرمة</div>
+      <div class="spC"></div>
+      <button class="btn ghost"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> إضافة حقل</button>
+      <button class="btn primary"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg> تصدير التقرير</button>
+    </header>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="cols">
+      <section class="card"><div class="pad">
+        <div class="ctitle"><div><h3>الحقول المراقَبة</h3>
+          <span class="sub">كل حقل بمحصوله ومؤشراته — NDVI من Sentinel‑2، التربة من OpenLandMap</span></div></div>
+        <div class="fgrid" id="fgrid"></div>
+      </div></section>
+
+      <section class="card"><div class="pad">
+        <div class="ctitle"><div><h3>الاستهلاك الأسبوعي حسب الحقل</h3>
+          <span class="sub">م³/أسبوع · ETc محسوب</span></div></div>
+        <svg id="bars" viewBox="0 0 400 260" role="img" aria-label="استهلاك المياه حسب الحقل"></svg>
+        <div class="ctitle" style="margin-top:14px"><h3 style="font-size:14px">ترتيب الهدر القابل للتفادي</h3></div>
+        <table class="tbl"><thead><tr><th>الحقل</th><th>أسبوعي</th><th>قابل للتفادي</th><th>الحالة</th></tr></thead>
+          <tbody id="tbody"></tbody></table>
+      </div></section>
+
+      <section class="card gw"><div class="pad" id="gw"></div></section>
+    </div>
+
+    <div class="foot">
+      <b>مرواء للهيئة السعودية للمياه</b> — مؤشر NDVI من Sentinel‑2، المناخ ET₀ من NASA POWER، نوع التربة من OpenLandMap،
+      والاحتياج محسوب وفق FAO‑56. الاستهلاك الفعلي (ETc) مقدّر لكل حقل؛ «المطبّق» و«الهدر» تقديريان بكفاءة ري إرشادية بلا عدّاد ميداني.
+    </div>
+  </main>
+</div>
+
+<script>
+// crop icons (no emoji)
+const leaf='<path d="M16 7 q4 -5 9 -3 q-2 5 -9 3 z" fill="#3f9e52"/><path d="M16 9 v-5" stroke="#3f9e52" stroke-width="1.6" fill="none"/>';
+const ICON={
+ tomato:`<svg viewBox="0 0 32 32"><circle cx="16" cy="19" r="10" fill="#e4452f"/>${leaf}</svg>`,
+ alfalfa:`<svg viewBox="0 0 32 32"><g stroke="#3f9e52" stroke-width="2" fill="none" stroke-linecap="round"><path d="M16 27 V12"/><path d="M16 16 C12 14 10 11 10 8"/><path d="M16 14 C20 12 22 9 22 6"/></g><g fill="#6fc06a"><circle cx="10" cy="8" r="2"/><circle cx="22" cy="6" r="2"/></g></svg>`,
+ sorghum:`<svg viewBox="0 0 32 32"><path d="M16 28 V11" stroke="#8a9a3a" stroke-width="2"/><ellipse cx="16" cy="8" rx="4" ry="6" fill="#c7a33a"/></svg>`,
+ grape:`<svg viewBox="0 0 32 32"><g fill="#7a4fb0"><circle cx="16" cy="13" r="3"/><circle cx="12" cy="17" r="3"/><circle cx="20" cy="17" r="3"/><circle cx="16" cy="20" r="3"/><circle cx="13" cy="23" r="3"/><circle cx="19" cy="23" r="3"/></g>${leaf}</svg>`,
+ date:`<svg viewBox="0 0 32 32"><g stroke="#3f9e52" stroke-width="2" fill="none" stroke-linecap="round"><path d="M16 14 C10 8 8 8 5 9"/><path d="M16 14 C22 8 24 8 27 9"/><path d="M16 14 C12 7 12 5 13 3"/><path d="M16 14 C20 7 20 5 19 3"/></g><g fill="#a8622e"><ellipse cx="14" cy="20" rx="2" ry="3"/><ellipse cx="18" cy="20" rx="2" ry="3"/><ellipse cx="16" cy="24" rx="2" ry="3"/></g></svg>`,
+ papaya:`<svg viewBox="0 0 32 32"><path d="M16 9 c5 0 8 5 8 11 c0 5 -4 8 -8 8 c-4 0 -8 -3 -8 -8 c0 -6 3 -11 8 -11 z" fill="#f0a93a"/><ellipse cx="16" cy="19" rx="3.4" ry="5" fill="#e07a2e" opacity=".55"/><g fill="#7a3f1a"><circle cx="16" cy="18" r=".9"/><circle cx="14" cy="20" r=".9"/><circle cx="18" cy="20" r=".9"/><circle cx="16" cy="22" r=".9"/></g>${leaf}</svg>`};
+
+// === real field data (filled from the pipeline) ===
+const FIELDS=__FIELDS__;
+
+const nf=x=> (x==null?'—':Number(x).toLocaleString('en-US'));
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+const STc={over:['ريّ زائد','--crit'],ok:['مطابق','--good'],idle:['غير نشط','--muted']};
+
+function kpis(){
+  const act=FIELDS.filter(f=>f.week_m3);
+  const wk=act.reduce((s,f)=>s+(f.week_m3||0),0);
+  const yr=act.reduce((s,f)=>s+(f.annual_m3||0),0);
+  const av=act.reduce((s,f)=>s+(f.avoid_m3||0),0)*52;
+  const K=[
+   ['الحقول المراقَبة',FIELDS.length,'',''],
+   ['استهلاك أسبوعي',nf(wk)+' <small>م³</small>','',''],
+   ['استهلاك سنوي تقديري',nf(yr)+' <small>م³</small>','',''],
+   ['هدر سنوي قابل للتفادي',nf(av)+' <small>م³</small>','‏~41% من المطبّق','warn'],
+   ['متوسط كفاءة الري','50<small>%</small>','الهدف 85%','crit']];
+  document.getElementById('kpis').innerHTML=K.map(k=>
+   `<div class="kpi"><div class="k">${k[0]}</div><div class="v num">${k[1]}</div>${k[2]?`<div class="d ${k[3]}">${k[2]}</div>`:''}</div>`).join('');
+}
+function cards(){
+  document.getElementById('fgrid').innerHTML=FIELDS.map(f=>{
+    const st=STc[f.status||'idle'];
+    const applied=f.applied_m3||1, avoid=f.avoid_m3||0, pct=Math.round(avoid/applied*100)||0;
+    return `<div class="fcard">
+      <div class="thumb" style="background-image:url(${f.thumb||''})"><div class="scrim"></div>
+        <span class="cropbadge"><span class="ic">${ICON[f.crop]||''}</span>${f.crop_ar||''}</span>
+        <span class="sdot ${f.status||'idle'}"></span></div>
+      <div class="finfo">
+        <div class="fname">${f.name}</div>
+        <div class="fplace">${f.area} هـ · ${(+f.lat).toFixed(2)}, ${(+f.lon).toFixed(2)}</div>
+        <div class="frow">
+          <div><div class="k">أسبوعي م³</div><div class="v num">${nf(f.week_m3)}</div></div>
+          <div><div class="k">NDVI</div><div class="v num">${f.ndvi??'—'}</div></div>
+          <div><div class="k">التربة</div><div class="v" style="font-size:11.5px">${f.soil_ar||'—'}</div></div>
+        </div>
+        <div class="wbar"><i style="width:${Math.min(100,pct)}%"></i></div>
+        <div class="wbartxt">${f.avoid_m3?('قابل للتفادي ≈ '+nf(f.avoid_m3)+' م³/أسبوع ('+pct+'%)'):'لا بيانات ريّ'}</div>
+      </div></div>`;}).join('');
+}
+function bars(){
+  const svg=document.getElementById('bars');
+  const data=FIELDS.filter(f=>f.week_m3).sort((a,b)=>b.week_m3-a.week_m3);
+  const W=400,H=260,L=96,R=16,T=8,B=8,n=data.length||1;
+  const max=Math.max(...data.map(f=>f.week_m3),1), bh=(H-T-B)/n*0.62, gap=(H-T-B)/n;
+  const sky=css('--sky'),mut=css('--muted'),ink=css('--ink');
+  let s='';
+  data.forEach((f,i)=>{const y=T+i*gap+gap*0.19, w=(f.week_m3/max)*(W-L-R);
+    s+=`<text x="${W-8}" y="${y+bh/2+4}" text-anchor="end" font-size="11" fill="${mut}" font-family="Cairo">${f.name}</text>`;
+    s+=`<rect x="${L}" y="${y}" width="${w}" height="${bh}" rx="5" fill="${sky}" opacity="0.9"/>`;
+    s+=`<text x="${L+w-6}" y="${y+bh/2+4}" text-anchor="end" font-size="10.5" fill="#fff" font-weight="700" font-family="Space Grotesk">${nf(f.week_m3)}</text>`;});
+  svg.setAttribute('viewBox',`0 0 ${W} ${Math.max(H,T+B+n*gap)}`);
+  svg.innerHTML=s;
+}
+function table(){
+  const data=FIELDS.filter(f=>f.week_m3).sort((a,b)=>(b.avoid_m3||0)-(a.avoid_m3||0));
+  document.getElementById('tbody').innerHTML=data.map(f=>{const st=STc[f.status||'idle'];
+    return `<tr><td>${f.name}</td><td><span class="num">${nf(f.week_m3)}</span></td>
+     <td><span class="num" style="color:var(--warn)">${nf(f.avoid_m3)}</span></td>
+     <td><span class="tag" style="background:var(${st[1]})">${st[0]}</span></td></tr>`;}).join('');
+}
+function gw(){
+  const act=FIELDS.filter(f=>f.annual_m3);
+  const yr=act.reduce((s,f)=>s+f.annual_m3,0), av=act.reduce((s,f)=>s+(f.avoid_m3||0),0)*52;
+  document.getElementById('gw').innerHTML=`
+   <div class="g"><div class="k">إجمالي السحب السنوي المقدَّر</div><div class="v num">${nf(yr)} م³</div><div class="s">من ${act.length} حقول مراقَبة</div></div>
+   <div class="g"><div class="k">قابل للتفادي سنويًا</div><div class="v num">${nf(av)} م³</div><div class="s">برفع الكفاءة نحو أفضل ممارسة</div></div>
+   <div class="g"><div class="k">مصدر المياه</div><div class="v num">90%</div><div class="s">جوفية غير متجددة (وزارة البيئة والمياه والزراعة)</div></div>
+   <div class="g"><div class="k">الارتباط بالرؤية</div><div class="v" style="font-size:18px">هدف 6 · رؤية 2030</div><div class="s">ترشيد المياه والاستهلاك المسؤول</div></div>`;
+}
+function renderAll(){kpis();cards();bars();table();gw();}
+
+// theme
+function applyTheme(t){const r=document.documentElement;if(t)r.setAttribute('data-theme',t);else r.removeAttribute('data-theme');bars();}
+try{const s=localStorage.getItem('mirwa-theme');if(s)applyTheme(s);}catch(e){}
+document.getElementById('themeBtn').addEventListener('click',()=>{
+  const cur=document.documentElement.getAttribute('data-theme');
+  const dark=cur?cur==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+  const next=dark?'light':'dark';try{localStorage.setItem('mirwa-theme',next);}catch(e){}applyTheme(next);});
+renderAll();
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(!document.documentElement.getAttribute('data-theme'))bars();});
+</script>

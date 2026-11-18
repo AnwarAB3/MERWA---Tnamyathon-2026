@@ -416,102 +416,23 @@ def _nf(x):
 
 
 def swa_flow():
+    import streamlit.components.v1 as components
     fields = load_swa_fields()
-    st.markdown(
-        '<div class="swatop"><div><div class="hi">الهيئة السعودية للمياه · مراقبة السحب الجوفي</div>'
-        '<h2>مراقبة الحقول المرويّة من المياه الجوفية</h2></div>'
-        '<div class="pill">منطقة مكة المكرمة</div></div>', unsafe_allow_html=True)
-
     if not fields:
         st.info("لا توجد بيانات حقول بعد. شغّل swa_fields.py لحساب الحقول."); return
-
-    act = [f for f in fields if f.get("week_m3")]
-    wk = sum(f["week_m3"] for f in act)
-    yr = sum(f.get("annual_m3", 0) for f in act)              # consumptive (ETc) annual
-    applied_yr = sum(f.get("applied_m3", 0) for f in act) * 52  # abstracted (pumped) annual
-    av = sum(f.get("avoid_m3", 0) for f in act) * 52          # avoidable annual
-    av_pct = round(av / applied_yr * 100) if applied_yr else 0
-    kpis = [
-        ("الحقول المراقَبة", f"{len(fields)}", "", ""),
-        ("استهلاك أسبوعي", f"{_nf(wk)} <small>م³</small>", "", ""),
-        ("استهلاك سنوي تقديري", f"{_nf(yr)} <small>م³</small>", "", ""),
-        ("هدر سنوي قابل للتفادي", f"{_nf(av)} <small>م³</small>", f"‏~{av_pct}% من المطبّق", "warn"),
-        ("متوسط كفاءة الري", "50<small>%</small>", "الهدف 85%", "crit"),
-    ]
-    kh = "".join(f'<div class="kpi"><div class="k">{k}</div><div class="v">{v}</div>'
-                 f'<div class="d {c}">{d}</div></div>' for k, v, d, c in kpis)
-    st.markdown(f'<div class="kpis">{kh}</div>', unsafe_allow_html=True)
-
-    # field cards
-    STA = {"over": ("ريّ زائد", "over"), "ok": ("مطابق", "ok"), "idle": ("غير نشط", "idle")}
-    maxw = max((f.get("week_m3", 0) for f in fields), default=1) or 1
-    cards = ""
-    for f in fields:
-        icon = crops.ICONS.get(f.get("crop", ""), crops.ICONS["generic"])
-        stat = f.get("status", "idle")
-        has = f.get("week_m3") is not None
-        ndvi = f"{f['ndvi']:.2f}" if f.get("ndvi") is not None else "—"
-        wkv = f"{_nf(f.get('week_m3'))}" if has else "بانتظار مشهد"
-        bar = round((f.get("week_m3", 0) / maxw) * 100) if has else 0
-        bg = (f'background-image:linear-gradient(180deg,rgba(8,20,12,.05),rgba(8,20,12,.5)),'
-              f'url({f["thumb_uri"]})') if f.get("thumb_uri") else "background:#2a3a2a"
-        cards += (
-            f'<div class="fcard"><div class="thumb" style="{bg};background-size:cover;background-position:center">'
-            f'<div class="cropbadge"><span class="ic">{icon}</span>{f.get("crop_ar","")}</div>'
-            f'<div class="sdot {stat}"></div></div>'
-            f'<div class="finfo"><div class="fname">{f["name"]}</div>'
-            f'<div class="fplace">{f["area"]} هكتار · تربة {f.get("soil_ar","—")}</div>'
-            f'<div class="frow"><div><div class="k">أسبوعي م³</div><div class="v">{wkv}</div></div>'
-            f'<div><div class="k">NDVI</div><div class="v">{ndvi}</div></div>'
-            f'<div><div class="k">الحالة</div><div class="v">{STA.get(stat,("—",""))[0]}</div></div></div>'
-            f'<div class="wbar"><i style="width:{bar}%"></i></div>'
-            f'<div class="wbartxt">{"نصيب الحقل من أعلى استهلاك" if has else "لا يوجد مشهد صافٍ حديث"}</div>'
-            f'</div></div>')
-    st.markdown('<div class="card"><div class="t">الحقول المراقَبة</div>'
-                '<div class="note">كل حقل بمحصوله ومؤشراته — NDVI من Sentinel‑2، '
-                'التربة من OpenLandMap، والاحتياج محسوب وفق FAO‑56.</div></div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div class="fgrid">{cards}</div>', unsafe_allow_html=True)
-
-    # ranked avoidable-waste table
-    ranked = sorted(act, key=lambda f: f.get("avoid_m3", 0), reverse=True)
-    rows = ""
-    for f in ranked:
-        lbl, cls = STA.get(f.get("status", "idle"), ("—", ""))
-        color = {"over": "var(--crit)", "ok": "var(--good)", "idle": "var(--muted)"}[cls or "idle"]
-        rows += (f'<tr><td>{f["name"]}</td><td class="num">{_nf(f.get("week_m3"))}</td>'
-                 f'<td class="num">{_nf(f.get("avoid_m3"))}</td>'
-                 f'<td><span class="tag" style="background:{color}">{lbl}</span></td></tr>')
-    st.markdown('<div style="height:10px"></div><div class="card"><div class="t">ترتيب الهدر القابل للتفادي</div>'
-                f'<table class="swatbl"><thead><tr><th>الحقل</th><th>أسبوعي م³</th>'
-                f'<th>قابل للتفادي م³</th><th>الحالة</th></tr></thead><tbody>{rows}</tbody></table>'
-                '</div>', unsafe_allow_html=True)
-
-    # consumptive-use bar chart (altair)
-    if act:
-        dfb = pd.DataFrame([{"الحقل": f["name"], "م³/أسبوع": f["week_m3"]} for f in act])
-        chart = alt.Chart(dfb).mark_bar(color="#2f9e55", cornerRadiusEnd=5).encode(
-            x=alt.X("م³/أسبوع:Q", title="م³/أسبوع"),
-            y=alt.Y("الحقل:N", sort="-x", title=None))
-        st.altair_chart(chart, use_container_width=True)
-
-    # groundwater panel
-    st.markdown(
-        '<div class="gw">'
-        f'<div class="g"><div class="k">سحب جوفي سنوي مقدَّر</div><div class="v">{_nf(applied_yr)} م³</div>'
-        '<div class="s">الماء المضخوخ من الخزّان الجوفي (نحو 90% غير متجدّد)</div></div>'
-        f'<div class="g"><div class="k">استهلاك فعلي (ETc)</div><div class="v">{_nf(yr)} م³</div>'
-        '<div class="s">ما يستهلكه المحصول فعليًا من هذا السحب</div></div>'
-        f'<div class="g"><div class="k">وفْر ممكن سنويًا</div><div class="v">{_nf(av)} م³</div>'
-        f'<div class="s">‏~{av_pct}% من السحب، برفع الكفاءة نحو الهدف 85%</div></div>'
-        '<div class="g"><div class="k">الأثر</div><div class="v">SDG 6 · رؤية 2030</div>'
-        '<div class="s">حفظ المخزون الجوفي وترشيد الاستهلاك</div></div>'
-        '</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="foot note" style="margin-top:14px">المصادر: مؤشر NDVI من Sentinel‑2، '
-                'المناخ ET₀ من NASA POWER، نوع التربة من OpenLandMap، والاحتياج وفق FAO‑56. '
-                'الاستهلاك الفعلي (ETc) مقدّر لكل حقل؛ «المطبّق» و«الهدر» تقديريان بكفاءة ري '
-                'إرشادية بلا عدّاد ميداني.</div>', unsafe_allow_html=True)
+    # feed the real artifact dashboard its data (thumbnails inlined as data URIs)
+    payload = [{
+        "name": f["name"], "lat": f["lat"], "lon": f["lon"], "area": f["area"],
+        "crop": f.get("crop"), "crop_ar": f.get("crop_ar"), "ndvi": f.get("ndvi"),
+        "soil_ar": f.get("soil_ar"), "week_m3": f.get("week_m3"),
+        "annual_m3": f.get("annual_m3"), "applied_m3": f.get("applied_m3"),
+        "avoid_m3": f.get("avoid_m3"), "status": f.get("status", "idle"),
+        "thumb": f.get("thumb_uri", ""),
+    } for f in fields]
+    tmpl = (BASE / "frontend" / "swa_dashboard.html").read_text(encoding="utf-8")
+    html = ("<!doctype html>\n<meta charset='utf-8'>\n"
+            + tmpl.replace("__FIELDS__", json.dumps(payload, ensure_ascii=False)))
+    components.html(html, height=1080, scrolling=True)
 
 
 # ================================================================= entry state machine
