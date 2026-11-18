@@ -27,6 +27,7 @@ import ndvi_image
 import sentinel2
 import fao56
 import crops
+import soil as soil_api
 
 st.set_page_config(page_title="مرواء — منصة ترشيد الري", page_icon="💧", layout="wide")
 MONTH = dt.date.today().month
@@ -148,11 +149,31 @@ ICON_IMG = ('<svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke=
 
 
 # ----------------------------------------------------------------- shared controls / renderers
-def soil_crop_controls(prefix):
+@st.cache_data(show_spinner=False)
+def get_soil(lat, lon):
+    try:
+        return soil_api.detect_soil(lat, lon)
+    except Exception:
+        return None
+
+
+def soil_crop_controls(prefix, lat=None, lon=None):
     c1, c2 = st.columns(2)
-    soil_label = c1.selectbox("نوع تربة الحقل", list(crops.SOILS.values()),
-                              key=prefix + "soil")
-    soil = next(k for k, v in crops.SOILS.items() if v == soil_label)
+    buckets = list(crops.SOILS.values())            # رملية / طميية / طينية
+    detected = get_soil(lat, lon) if (lat is not None and lon is not None) else None
+    idx = 0
+    if detected:
+        try:
+            idx = buckets.index(crops.SOILS[detected.bucket])
+        except Exception:
+            idx = 0
+    soil_label = c1.selectbox("نوع تربة الحقل", buckets, index=idx, key=prefix + "soil")
+    s = next(k for k, v in crops.SOILS.items() if v == soil_label)
+    if detected:
+        c1.caption(f"اكتُشف تلقائيًا من OpenLandMap: {detected.name_ar} "
+                   f"(تصنيف USDA) — يمكنك تعديله")
+    elif lat is not None:
+        c1.caption("تعذّر الكشف التلقائي للتربة الآن — اختر يدويًا")
     opts = crops.current_crop_options()
     names = [n for _, n in opts]
     name = c2.selectbox("المحصول المزروع حاليًا", names, key=prefix + "crop",
@@ -160,7 +181,7 @@ def soil_crop_controls(prefix):
                              "أمّا مؤشر الخضرة NDVI فيبقى مقيسًا من القمر الصناعي، "
                              "لا يُدخل يدويًا.")
     cid = opts[names.index(name)][0]
-    return soil, cid, crops.kcb_max(cid)
+    return s, cid, crops.kcb_max(cid)
 
 
 def render_variables(v):
@@ -364,7 +385,7 @@ def coordinate_flow():
                 st.session_state.analyzed_coord = True
 
         if st.session_state.get("analyzed_coord"):
-            soil, cid, kcb = soil_crop_controls("co_")
+            soil, cid, kcb = soil_crop_controls("co_", loc["lat"], loc["lon"])
             with st.spinner("نقرأ مؤشر NDVI من Sentinel‑2 والمناخ ونحسب الاحتياج…"):
                 et = get_et0(loc["lat"], loc["lon"])
                 s2 = get_s2(loc["lat"], loc["lon"])
@@ -411,8 +432,12 @@ def upload_flow():
 
     colA, colB = st.columns([1, 2])
     area = colA.number_input("مساحة المحور (هكتار)", 1.0, 2000.0, 50.0, 5.0, key="u_area")
-    coord = colB.text_input("إحداثية الموقع (لجلب المناخ ET₀)", value=DEFAULT_COORD, key="u_coord")
-    soil, cid, kcb = soil_crop_controls("up_")
+    coord = colB.text_input("إحداثية الموقع (لجلب المناخ ET₀ والتربة)", value=DEFAULT_COORD, key="u_coord")
+    try:
+        _ula, _ulo = pc.parse_coord(coord)
+    except Exception:
+        _ula = _ulo = None
+    soil, cid, kcb = soil_crop_controls("up_", _ula, _ulo)
 
     if st.button("حلّل الحقل", type="primary", use_container_width=True):
         try:

@@ -36,6 +36,7 @@ ICONS = {
     "fig": f'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 10 c6 2 8 8 5 13 c-3 5 -11 5 -13 -1 c-2 -6 2 -14 8 -12 z" fill="#6b4b8a"/>{_leaf(16,8)}</svg>',
     "alfalfa": '<svg viewBox="0 0 32 32" width="30" height="30"><g stroke="#3f9e52" stroke-width="2" fill="none" stroke-linecap="round"><path d="M16 27 V12"/><path d="M16 16 C12 14 10 11 10 8"/><path d="M16 14 C20 12 22 9 22 6"/><path d="M16 19 C13 18 11 16 10 13"/></g><g fill="#6fc06a"><circle cx="10" cy="8" r="2"/><circle cx="22" cy="6" r="2"/><circle cx="10" cy="13" r="2"/></g></svg>',
     "sorghum": '<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 28 V11" stroke="#8a9a3a" stroke-width="2"/><ellipse cx="16" cy="8" rx="4" ry="6" fill="#c7a33a"/><g stroke="#5f7a2a" stroke-width="1.5"><path d="M16 18 l-5 -3"/><path d="M16 21 l5 -3"/></g></svg>',
+    "papaya": f'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 9 c5 0 8 5 8 11 c0 5 -4 8 -8 8 c-4 0 -8 -3 -8 -8 c0 -6 3 -11 8 -11 z" fill="#f0a93a"/><ellipse cx="16" cy="19" rx="3.4" ry="5" fill="#e07a2e" opacity=".55"/><g fill="#7a3f1a"><circle cx="16" cy="18" r=".9"/><circle cx="14" cy="20" r=".9"/><circle cx="18" cy="20" r=".9"/><circle cx="16" cy="22" r=".9"/></g>{_leaf(16,7)}</svg>',
     "generic": f'<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 28 V14" stroke="#3f9e52" stroke-width="2"/><path d="M16 18 C10 17 8 13 8 9 C13 9 16 12 16 16" fill="#6fc06a"/><path d="M16 15 C22 14 24 10 24 6 C19 6 16 9 16 13" fill="#8fd18a"/></svg>',
 }
 
@@ -84,6 +85,9 @@ CROPS = [
     dict(id="sorghum", name="ذرة رفيعة", icon="sorghum", kcb=1.00, water="med",
          mm=500, seasons={"warm"}, soils={"loam", "sandy", "clay"},
          note="علف يتحمّل الحرارة باحتياج معتدل."),
+    dict(id="papaya", name="بابايا", icon="papaya", kcb=1.05, water="high",
+         mm=1600, seasons={"perennial"}, soils={"sandy", "loam"},
+         note="شجرة مثمرة دائمة كثيفة الاستهلاك للمياه؛ تناسب السهول الدافئة."),
 ]
 _BY_ID = {c["id"]: c for c in CROPS}
 

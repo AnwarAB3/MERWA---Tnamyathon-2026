@@ -44,19 +44,27 @@ def _closing(mask, size=9):
     return np.asarray(im) > 127
 
 
+_GDAL_HTTP = dict(
+    GDAL_HTTP_MAX_RETRY="5", GDAL_HTTP_RETRY_DELAY="1",
+    GDAL_HTTP_TIMEOUT="60", CPL_VSIL_CURL_USE_HEAD="NO",
+    GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+)
+
+
 def _read_window(href, bbox_ll, out_shape=None, nearest=False):
     import rasterio
     from rasterio.windows import from_bounds
     from rasterio.warp import transform_bounds
     from rasterio.enums import Resampling
-    with rasterio.open(href) as ds:
-        b = transform_bounds("EPSG:4326", ds.crs, *bbox_ll)
-        win = from_bounds(*b, transform=ds.transform)
-        h = out_shape[0] if out_shape else max(1, int(round(win.height)))
-        w = out_shape[1] if out_shape else max(1, int(round(win.width)))
-        data = ds.read(1, window=win, out_shape=(h, w),
-                       resampling=Resampling.nearest if nearest else Resampling.bilinear,
-                       boundless=True, fill_value=0)
+    with rasterio.Env(**_GDAL_HTTP):
+        with rasterio.open(href) as ds:
+            b = transform_bounds("EPSG:4326", ds.crs, *bbox_ll)
+            win = from_bounds(*b, transform=ds.transform)
+            h = out_shape[0] if out_shape else max(1, int(round(win.height)))
+            w = out_shape[1] if out_shape else max(1, int(round(win.width)))
+            data = ds.read(1, window=win, out_shape=(h, w),
+                           resampling=Resampling.nearest if nearest else Resampling.bilinear,
+                           boundless=True, fill_value=0)
     return data
 
 
@@ -81,9 +89,19 @@ def _classify(ndvi, valid):
 
 
 def fetch_ndvi(lat: float, lon: float, half_deg: float = 0.012,
-               months_back: int = 4, max_cloud: int = 35) -> S2Result | None:
+               months_back: int = 4, max_cloud: int = 35,
+               retries: int = 6) -> S2Result | None:
     """Return real-NDVI stats for the AOI around (lat, lon), or None if no
-    usable scene / dependencies / network."""
+    usable scene / dependencies / network. Retries transient read failures."""
+    for _attempt in range(max(1, retries)):
+        r = _fetch_ndvi_once(lat, lon, half_deg, months_back, max_cloud)
+        if r is not None and r.active_mean_ndvi == r.active_mean_ndvi:
+            return r
+    return r
+
+
+def _fetch_ndvi_once(lat: float, lon: float, half_deg: float = 0.012,
+                     months_back: int = 4, max_cloud: int = 35) -> S2Result | None:
     try:
         import planetary_computer
         from pystac_client import Client
