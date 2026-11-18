@@ -8,6 +8,8 @@
 """
 import sys
 import io
+import json
+import base64
 import datetime as dt
 from pathlib import Path
 
@@ -36,66 +38,142 @@ SAMPLE_TC = BASE / "data" / "sample_truecolor.jpg"
 SAMPLE_NDVI = BASE / "data" / "sample_ndvi.jpg"
 SAMPLE_FC = BASE / "data" / "sample_falsecolor.jpg"
 
-# ----------------------------------------------------------------- styling (RTL, minimal)
+# ----------------------------------------------------------------- styling (modern, RTL, green identity)
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
-html, body, [class*="css"], .stApp, button, input, textarea, select { font-family:'Cairo',sans-serif !important; }
-.stApp { direction: rtl; background:#f6f8fb; }
-.block-container { padding-top: 1.1rem; max-width: 1060px; }
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');
+:root{
+  --bg:#eef3ec; --surface:#ffffff; --surface-2:#f5f8f3; --ink:#15241b; --muted:#687a6e;
+  --line:#e2e9df; --green:#1f7a3f; --green-2:#2f9e55; --lime:#8fcf49; --sky:#2b7fd0;
+  --good:#2f9e55; --warn:#d98a2b; --crit:#cf4f45;
+  --shadow:0 1px 2px rgba(20,40,28,.04),0 10px 30px rgba(20,40,28,.06); --r:18px;
+  --fdisplay:"Space Grotesk","Cairo",system-ui,sans-serif;
+  --fbody:"Cairo",system-ui,"Segoe UI",sans-serif;
+}
+html, body, [class*="css"], .stApp, button, input, textarea, select { font-family:var(--fbody) !important; }
+.stApp { direction: rtl; background:var(--bg); color:var(--ink); }
+.block-container { padding-top: 1.3rem; max-width: 1180px; }
 h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
-.stTabs [data-baseweb="tab-list"]{ direction: rtl; gap:4px; }
-.stTabs [data-baseweb="tab"]{ font-weight:700; }
+.num,.var .v,.kpi .v,.rec .n{font-family:var(--fdisplay);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 
-.head{background:#0a2d6e;color:#fff;border-radius:18px;padding:18px 24px;margin-bottom:18px}
-.head h1{margin:0;font-size:26px;font-weight:900}
-.head p{margin:6px 0 0;font-size:14px;opacity:.9;font-weight:400;max-width:720px}
+/* tabs */
+.stTabs [data-baseweb="tab-list"]{ direction: rtl; gap:6px; border-bottom:1px solid var(--line); }
+.stTabs [data-baseweb="tab"]{ font-weight:700; color:var(--muted); }
+.stTabs [aria-selected="true"]{ color:var(--green) !important; }
+.stTabs [data-baseweb="tab-highlight"]{ background:var(--green) !important; }
 
-/* buttons: full width, consistent, no offset */
+/* inputs */
+.stTextInput input,.stNumberInput input,[data-baseweb="select"]>div{
+  border-radius:12px !important; border-color:var(--line) !important; }
+.stTextInput label,.stNumberInput label,.stSelectbox label{ font-weight:700; color:var(--ink); }
+
+/* buttons: pill, green primary */
 .stButton>button, .stDownloadButton>button{
-  width:100%; border-radius:12px; font-weight:800; font-size:16px; padding:12px 16px;
-  border:1px solid #d6deea; background:#fff; color:#0a2d6e; transition:.15s; }
-.stButton>button:hover{ border-color:#0a2d6e; }
-.stButton>button[kind="primary"]{ background:#0a2d6e; color:#fff; border:0; }
-.stButton>button[kind="primary"]:hover{ background:#0b347f; }
+  width:100%; border-radius:999px; font-weight:800; font-size:15.5px; padding:12px 18px;
+  border:1px solid var(--line); background:var(--surface); color:var(--green); transition:.15s; box-shadow:var(--shadow); }
+.stButton>button:hover{ border-color:var(--green); color:var(--green); }
+.stButton>button[kind="primary"]{ background:var(--green); color:#fff; border:0; }
+.stButton>button[kind="primary"]:hover{ background:#1a6a37; color:#fff; }
+
+/* metrics -> KPI cards */
+[data-testid="stMetric"]{ background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:14px 16px;box-shadow:var(--shadow); }
+[data-testid="stMetricLabel"]{ color:var(--muted);font-weight:700; }
+[data-testid="stMetricValue"]{ font-family:var(--fdisplay);font-weight:800;color:var(--ink); }
+
+/* expander */
+[data-testid="stExpander"]{ border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--shadow); }
+
+/* hero */
+.head{background:linear-gradient(110deg,var(--green),var(--green-2));color:#fff;border-radius:var(--r);
+  padding:22px 26px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.head:after{content:"";position:absolute;inset-inline-start:-40px;top:-60px;width:240px;height:240px;
+  border-radius:50%;background:rgba(255,255,255,.08)}
+.head .hi{font-size:12.5px;font-weight:700;opacity:.9;letter-spacing:.02em}
+.head h1{margin:2px 0 0;font-size:30px;font-weight:900;font-family:var(--fdisplay)}
+.head p{margin:8px 0 0;font-size:14px;opacity:.94;font-weight:500;max-width:740px;line-height:1.8}
 
 /* big choice cards */
-.choice{background:#fff;border:1px solid #e2e8f1;border-radius:18px;padding:26px 22px 8px;
-  text-align:center;min-height:210px;box-shadow:0 2px 14px rgba(10,45,110,.05)}
+.choice{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:28px 22px 10px;
+  text-align:center;min-height:216px;box-shadow:var(--shadow)}
 .choice svg{margin-bottom:10px}
-.choice h3{margin:0 0 6px;font-size:20px;color:#0a2d6e;text-align:center}
-.choice p{margin:0 auto;font-size:13.5px;color:#5c6b86;max-width:300px;text-align:center}
+.choice h3{margin:0 0 6px;font-size:20px;color:var(--ink);text-align:center;font-weight:800}
+.choice p{margin:0 auto;font-size:13.5px;color:var(--muted);max-width:300px;text-align:center;line-height:1.8}
 
-.panel{background:#fff;border:1px solid #e2e8f1;border-radius:16px;padding:16px 18px;margin-bottom:14px}
-.rec{background:#0a2d6e;color:#fff;border-radius:14px;padding:18px 22px;margin:4px 0 16px}
-.rec .l{font-size:13px;opacity:.85}
-.rec .n{font-size:26px;font-weight:900;margin-top:6px;line-height:1.35}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
+.rec{background:linear-gradient(110deg,var(--green),var(--green-2));color:#fff;border-radius:16px;padding:18px 22px;margin:4px 0 16px;box-shadow:var(--shadow)}
+.rec .l{font-size:13px;opacity:.9;font-weight:700}
+.rec .n{font-size:25px;font-weight:800;margin-top:6px;line-height:1.4}
 
-/* big variables */
-.vargrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:2px 0 14px}
-.var{background:#f3f6fb;border:1px solid #e4ebf4;border-radius:13px;padding:12px 14px}
-.var .k{font-size:12.5px;color:#5c6b86;font-weight:600}
-.var .v{font-size:18px;color:#0a2d6e;font-weight:900;margin-top:3px}
+/* variable tiles */
+.vargrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:2px 0 14px}
+.var{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow)}
+.var .k{font-size:12px;color:var(--muted);font-weight:700}
+.var .v{font-size:19px;color:var(--ink);font-weight:800;margin-top:4px}
 
 /* crop list */
-.cropgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:6px}
-.crop{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #e6edf6;border-radius:13px;padding:11px 13px}
+.cropgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px;margin-top:6px}
+.crop{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
 .crop .b{flex:1}
-.crop .n{font-weight:800;color:#15233d;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.crop .m{font-size:12px;color:#5c6b86;margin-top:3px;line-height:1.6}
+.crop .n{font-weight:800;color:var(--ink);font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.crop .m{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7}
 .wb{font-size:10.5px;font-weight:800;color:#fff;padding:2px 8px;border-radius:999px}
 
-.card{background:#fff;border:1px solid #e6edf6;border-radius:13px;padding:14px 16px;margin-bottom:10px}
-.card .t{font-weight:800;color:#0a2d6e;font-size:15px;margin-bottom:4px}
-.card .v{font-size:14px;color:#1f2d45;line-height:1.85}
-.note{font-size:12px;color:#5c6b86;line-height:1.8}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 17px;margin-bottom:10px;box-shadow:var(--shadow)}
+.card .t{font-weight:800;color:var(--green);font-size:15px;margin-bottom:5px}
+.card .v{font-size:14px;color:var(--ink);line-height:1.9}
+.note{font-size:12px;color:var(--muted);line-height:1.8}
 .tag{font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:999px;color:#fff}
-.tm{background:#1565c0}.tc{background:#2f9e44}.te{background:#C1551C}
+.tm{background:var(--sky)}.tc{background:var(--green-2)}.te{background:var(--warn)}
+
+/* ===== SWA monitoring dashboard ===== */
+.swatop{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 0 16px}
+.swatop .hi{font-size:12.5px;color:var(--muted);font-weight:700}
+.swatop h2{font-size:21px;font-weight:800;margin:1px 0 0;font-family:var(--fdisplay)}
+.pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:7px 14px;font-weight:700;font-size:12.5px;color:var(--ink);box-shadow:var(--shadow)}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 17px;box-shadow:var(--shadow)}
+.kpi .k{font-size:11.5px;color:var(--muted);font-weight:700}
+.kpi .v{font-size:25px;font-weight:800;margin-top:4px;color:var(--ink)}
+.kpi .v small{font-size:12px;color:var(--muted);font-weight:700}
+.kpi .d{font-size:11px;font-weight:700;margin-top:3px}
+.kpi .d.good{color:var(--good)} .kpi .d.warn{color:var(--warn)} .kpi .d.crit{color:var(--crit)}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(244px,1fr));gap:14px}
+.fcard{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.thumb{position:relative;height:124px;background:#2a3a2a center/cover no-repeat}
+.thumb .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,12,.05),rgba(8,20,12,.5))}
+.cropbadge{position:absolute;top:9px;inset-inline-start:9px;z-index:2;display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.94);border-radius:999px;padding:3px 11px 3px 4px;font-size:11.5px;font-weight:800;color:#15241b}
+.cropbadge .ic{width:25px;height:25px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.cropbadge .ic svg{width:20px;height:20px}
+.sdot{position:absolute;top:11px;inset-inline-end:11px;z-index:2;width:11px;height:11px;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.sdot.over{background:var(--crit)} .sdot.ok{background:var(--good)} .sdot.idle{background:var(--muted)}
+.finfo{padding:12px 14px}
+.finfo .fname{font-size:14.5px;font-weight:800;color:var(--ink)}
+.finfo .fplace{font-size:11px;color:var(--muted);font-weight:600;margin-top:1px}
+.frow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+.frow .k{font-size:10px;color:var(--muted);font-weight:700}
+.frow .v{font-size:13.5px;font-weight:800;margin-top:1px;color:var(--ink)}
+.wbar{height:6px;border-radius:4px;background:var(--surface-2);margin-top:11px;overflow:hidden}
+.wbar i{display:block;height:100%;border-radius:4px;background:var(--warn)}
+.wbartxt{font-size:10.5px;color:var(--muted);font-weight:700;margin-top:5px}
+.swatbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+.swatbl th,.swatbl td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line);color:var(--ink)}
+.swatbl th{font-size:11px;color:var(--muted);font-weight:700}
+.gw{background:linear-gradient(100deg,#0b3d6b,#135089);color:#fff;border-radius:var(--r);padding:20px 22px;margin-top:4px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:18px;box-shadow:var(--shadow)}
+.gw .g .k{font-size:12px;opacity:.82;font-weight:600}
+.gw .g .v{font-size:23px;font-weight:800;margin-top:3px;font-family:var(--fdisplay)}
+.gw .g .s{font-size:11px;opacity:.82;margin-top:2px;line-height:1.6}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.gw{grid-template-columns:1fr 1fr}}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="head">
+  <div class="hi">تنمية‑ثون 2026 · المحور البيئي والاستدامة · منطقة مكة المكرمة</div>
   <h1>مِرواء</h1>
   <p>منصة تقدّر الاحتياج المائي الفعلي لكل حقل من صور الأقمار الاصطناعية وفق منهجية
   FAO‑56، فتعرف كم يحتاج حقلك من الماء هذا الأسبوع، وكم يمكن أن توفّر.</p>
@@ -140,12 +218,16 @@ def classified_png(path):
     return Image.fromarray(out)
 
 
-ICON_PIN = ('<svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#0a2d6e" '
+ICON_PIN = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
             'stroke-width="1.7"><path d="M12 21c4-5 7-8.5 7-12a7 7 0 1 0-14 0c0 3.5 3 7 7 12z"/>'
             '<circle cx="12" cy="9" r="2.6"/></svg>')
-ICON_IMG = ('<svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#0a2d6e" '
+ICON_IMG = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
             'stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/>'
             '<circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>')
+ICON_GRID = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
+             'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+             '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>'
+             '<rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>')
 
 
 # ----------------------------------------------------------------- shared controls / renderers
@@ -309,15 +391,138 @@ def render_timeseries(lat, lon, area_ha):
         st.caption(f"{len(rows)} مشاهد حقيقية · كل القيم محسوبة لا مُدخلة يدويًا.")
 
 
+# ================================================================= SWA monitoring dashboard
+SWA_DIR = BASE / "screenshots" / "swa"
+
+
+@st.cache_data(show_spinner=False)
+def load_swa_fields():
+    fp = SWA_DIR / "fields.json"
+    if not fp.exists():
+        return []
+    data = json.loads(fp.read_text(encoding="utf-8"))
+    for f in data:
+        thumb = SWA_DIR / f.get("thumb", "")
+        if thumb.exists():
+            b = base64.b64encode(thumb.read_bytes()).decode()
+            f["thumb_uri"] = f"data:image/jpeg;base64,{b}"
+        else:
+            f["thumb_uri"] = ""
+    return data
+
+
+def _nf(x):
+    return "—" if x is None else f"{int(round(x)):,}"
+
+
+def swa_flow():
+    fields = load_swa_fields()
+    st.markdown(
+        '<div class="swatop"><div><div class="hi">الهيئة السعودية للمياه · مراقبة السحب الجوفي</div>'
+        '<h2>مراقبة الحقول المرويّة من المياه الجوفية</h2></div>'
+        '<div class="pill">منطقة مكة المكرمة</div></div>', unsafe_allow_html=True)
+
+    if not fields:
+        st.info("لا توجد بيانات حقول بعد. شغّل swa_fields.py لحساب الحقول."); return
+
+    act = [f for f in fields if f.get("week_m3")]
+    wk = sum(f["week_m3"] for f in act)
+    yr = sum(f.get("annual_m3", 0) for f in act)              # consumptive (ETc) annual
+    applied_yr = sum(f.get("applied_m3", 0) for f in act) * 52  # abstracted (pumped) annual
+    av = sum(f.get("avoid_m3", 0) for f in act) * 52          # avoidable annual
+    av_pct = round(av / applied_yr * 100) if applied_yr else 0
+    kpis = [
+        ("الحقول المراقَبة", f"{len(fields)}", "", ""),
+        ("استهلاك أسبوعي", f"{_nf(wk)} <small>م³</small>", "", ""),
+        ("استهلاك سنوي تقديري", f"{_nf(yr)} <small>م³</small>", "", ""),
+        ("هدر سنوي قابل للتفادي", f"{_nf(av)} <small>م³</small>", f"‏~{av_pct}% من المطبّق", "warn"),
+        ("متوسط كفاءة الري", "50<small>%</small>", "الهدف 85%", "crit"),
+    ]
+    kh = "".join(f'<div class="kpi"><div class="k">{k}</div><div class="v">{v}</div>'
+                 f'<div class="d {c}">{d}</div></div>' for k, v, d, c in kpis)
+    st.markdown(f'<div class="kpis">{kh}</div>', unsafe_allow_html=True)
+
+    # field cards
+    STA = {"over": ("ريّ زائد", "over"), "ok": ("مطابق", "ok"), "idle": ("غير نشط", "idle")}
+    maxw = max((f.get("week_m3", 0) for f in fields), default=1) or 1
+    cards = ""
+    for f in fields:
+        icon = crops.ICONS.get(f.get("crop", ""), crops.ICONS["generic"])
+        stat = f.get("status", "idle")
+        has = f.get("week_m3") is not None
+        ndvi = f"{f['ndvi']:.2f}" if f.get("ndvi") is not None else "—"
+        wkv = f"{_nf(f.get('week_m3'))}" if has else "بانتظار مشهد"
+        bar = round((f.get("week_m3", 0) / maxw) * 100) if has else 0
+        bg = (f'background-image:linear-gradient(180deg,rgba(8,20,12,.05),rgba(8,20,12,.5)),'
+              f'url({f["thumb_uri"]})') if f.get("thumb_uri") else "background:#2a3a2a"
+        cards += (
+            f'<div class="fcard"><div class="thumb" style="{bg};background-size:cover;background-position:center">'
+            f'<div class="cropbadge"><span class="ic">{icon}</span>{f.get("crop_ar","")}</div>'
+            f'<div class="sdot {stat}"></div></div>'
+            f'<div class="finfo"><div class="fname">{f["name"]}</div>'
+            f'<div class="fplace">{f["area"]} هكتار · تربة {f.get("soil_ar","—")}</div>'
+            f'<div class="frow"><div><div class="k">أسبوعي م³</div><div class="v">{wkv}</div></div>'
+            f'<div><div class="k">NDVI</div><div class="v">{ndvi}</div></div>'
+            f'<div><div class="k">الحالة</div><div class="v">{STA.get(stat,("—",""))[0]}</div></div></div>'
+            f'<div class="wbar"><i style="width:{bar}%"></i></div>'
+            f'<div class="wbartxt">{"نصيب الحقل من أعلى استهلاك" if has else "لا يوجد مشهد صافٍ حديث"}</div>'
+            f'</div></div>')
+    st.markdown('<div class="card"><div class="t">الحقول المراقَبة</div>'
+                '<div class="note">كل حقل بمحصوله ومؤشراته — NDVI من Sentinel‑2، '
+                'التربة من OpenLandMap، والاحتياج محسوب وفق FAO‑56.</div></div>',
+                unsafe_allow_html=True)
+    st.markdown(f'<div class="fgrid">{cards}</div>', unsafe_allow_html=True)
+
+    # ranked avoidable-waste table
+    ranked = sorted(act, key=lambda f: f.get("avoid_m3", 0), reverse=True)
+    rows = ""
+    for f in ranked:
+        lbl, cls = STA.get(f.get("status", "idle"), ("—", ""))
+        color = {"over": "var(--crit)", "ok": "var(--good)", "idle": "var(--muted)"}[cls or "idle"]
+        rows += (f'<tr><td>{f["name"]}</td><td class="num">{_nf(f.get("week_m3"))}</td>'
+                 f'<td class="num">{_nf(f.get("avoid_m3"))}</td>'
+                 f'<td><span class="tag" style="background:{color}">{lbl}</span></td></tr>')
+    st.markdown('<div style="height:10px"></div><div class="card"><div class="t">ترتيب الهدر القابل للتفادي</div>'
+                f'<table class="swatbl"><thead><tr><th>الحقل</th><th>أسبوعي م³</th>'
+                f'<th>قابل للتفادي م³</th><th>الحالة</th></tr></thead><tbody>{rows}</tbody></table>'
+                '</div>', unsafe_allow_html=True)
+
+    # consumptive-use bar chart (altair)
+    if act:
+        dfb = pd.DataFrame([{"الحقل": f["name"], "م³/أسبوع": f["week_m3"]} for f in act])
+        chart = alt.Chart(dfb).mark_bar(color="#2f9e55", cornerRadiusEnd=5).encode(
+            x=alt.X("م³/أسبوع:Q", title="م³/أسبوع"),
+            y=alt.Y("الحقل:N", sort="-x", title=None))
+        st.altair_chart(chart, use_container_width=True)
+
+    # groundwater panel
+    st.markdown(
+        '<div class="gw">'
+        f'<div class="g"><div class="k">سحب جوفي سنوي مقدَّر</div><div class="v">{_nf(applied_yr)} م³</div>'
+        '<div class="s">الماء المضخوخ من الخزّان الجوفي (نحو 90% غير متجدّد)</div></div>'
+        f'<div class="g"><div class="k">استهلاك فعلي (ETc)</div><div class="v">{_nf(yr)} م³</div>'
+        '<div class="s">ما يستهلكه المحصول فعليًا من هذا السحب</div></div>'
+        f'<div class="g"><div class="k">وفْر ممكن سنويًا</div><div class="v">{_nf(av)} م³</div>'
+        f'<div class="s">‏~{av_pct}% من السحب، برفع الكفاءة نحو الهدف 85%</div></div>'
+        '<div class="g"><div class="k">الأثر</div><div class="v">SDG 6 · رؤية 2030</div>'
+        '<div class="s">حفظ المخزون الجوفي وترشيد الاستهلاك</div></div>'
+        '</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="foot note" style="margin-top:14px">المصادر: مؤشر NDVI من Sentinel‑2، '
+                'المناخ ET₀ من NASA POWER، نوع التربة من OpenLandMap، والاحتياج وفق FAO‑56. '
+                'الاستهلاك الفعلي (ETc) مقدّر لكل حقل؛ «المطبّق» و«الهدر» تقديريان بكفاءة ري '
+                'إرشادية بلا عدّاد ميداني.</div>', unsafe_allow_html=True)
+
+
 # ================================================================= entry state machine
 if "entry" not in st.session_state:
     st.session_state.entry = None
 
 
 def landing():
-    st.markdown("<h3 style='text-align:center'>اختر كيف تبدأ بتحليل حقلك</h3>",
+    st.markdown("<h3 style='text-align:center'>اختر كيف تبدأ</h3>",
                 unsafe_allow_html=True)
-    c1, c2 = st.columns(2, gap="large")
+    c1, c2, c3 = st.columns(3, gap="large")
     with c1:
         st.markdown(f'<div class="choice">{ICON_PIN}<h3>أدخل إحداثيات حقلك</h3>'
                     '<p>الصق إحداثية من خرائط جوجل، ونتكفّل بسحب صور القمر الصناعي '
@@ -332,6 +537,14 @@ def landing():
         if st.button("البدء برفع الصور", key="pick_upload", type="primary",
                      use_container_width=True):
             st.session_state.entry = "upload"; st.rerun()
+    with c3:
+        st.markdown(f'<div class="choice">{ICON_GRID}<h3>لوحة الهيئة السعودية للمياه</h3>'
+                    '<p>مراقبة كل الحقول المرويّة من المياه الجوفية في المنطقة: '
+                    'استهلاكها ومؤشراتها ومحاصيلها في لوحة واحدة.</p></div>',
+                    unsafe_allow_html=True)
+        if st.button("فتح لوحة المراقبة", key="pick_swa", type="primary",
+                     use_container_width=True):
+            st.session_state.entry = "swa"; st.rerun()
 
 
 def coordinate_flow():
@@ -488,7 +701,7 @@ else:
         st.session_state.entry = None
         st.rerun()
     st.write("")
-    (coordinate_flow if st.session_state.entry == "coord" else upload_flow)()
+    {"coord": coordinate_flow, "upload": upload_flow, "swa": swa_flow}[st.session_state.entry]()
 
 st.divider()
 st.caption("مرواء — نموذج أولي · تنمية ثون 2026 · المحور البيئي والاستدامة · منطقة مكة المكرمة")
