@@ -364,8 +364,7 @@ function openDetail(i){
       <div class="ssub">المؤشرات المقيسة (قمر صناعي)</div>
       ${_drow('مؤشر الخضرة NDVI', f.ndvi??'—')}
       ${_drow('نوع التربة', f.soil_ar||'—')}
-      ${_drow('غطاء نشِط', (f.active_pct??'—')+'٪')}
-      ${_drow('أرض فارغة', (f.idle_pct??'—')+'٪')}
+      ${_drow('أرض فارغة داخل الحقل', (f.idle_pct??'—')+'٪')}
       ${_drow('مشهد القمر', f.scene||'—')}
       ${_drow('ارتفاع الموقع', f.elev!=null?nf(f.elev)+' م':'—')}
       <div class="ssub">المناخ والاحتياج (FAO‑56)</div>
