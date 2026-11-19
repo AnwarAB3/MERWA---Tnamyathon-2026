@@ -471,6 +471,10 @@ def swa_flow():
         "annual_m3": f.get("annual_m3"), "applied_m3": f.get("applied_m3"),
         "avoid_m3": f.get("avoid_m3"), "status": f.get("status", "idle"),
         "thumb": f.get("thumb_uri", ""),
+        # extra metrics for the per-field detail view
+        "et0": f.get("et0"), "kc": f.get("kc"), "scene": f.get("scene"),
+        "elev": f.get("elev"), "idle_pct": f.get("idle_pct"),
+        "active_pct": f.get("active_pct"), "over_pct": f.get("over_pct"),
     } for f in fields]
     tmpl = (BASE / "frontend" / "swa_dashboard.html").read_text(encoding="utf-8")
     html = ("<!doctype html>\n<meta charset='utf-8'>\n"
@@ -511,6 +515,20 @@ def landing():
             st.session_state.entry = "swa"; st.rerun()
 
 
+# quick-pick farms for testers (label, coordinate string)
+FARM_PRESETS = [
+    ("مزرعة الساحل · طماطم", "21°12'43.12\"N 39°39'51.46\"E"),
+    ("بابايا الليث · بابايا", "20°35'00.01\"N 40°29'35.58\"E"),
+    ("نخيل رهاط · تمر", "22°04'43.66\"N 40°01'41.40\"E"),
+]
+
+
+def _pick_coord(c):
+    """Load a preset coordinate and auto-run the search on the next rerun."""
+    st.session_state.coord_val = c
+    st.session_state._auto_search = True
+
+
 def _ge_url(lat, lon):
     """Open the exact point in Google Earth (web), tilted view."""
     return f"https://earth.google.com/web/@{lat},{lon},0a,1600d,35y,0h,0t,0r"
@@ -545,10 +563,18 @@ def render_field_map(lat, lon, fld=None, height=380, key="fmap"):
 
 def coordinate_flow():
     st.subheader("موقع الحقل")
+    st.session_state.setdefault("coord_val", DEFAULT_COORD)
     coord = st.text_input("أدخل إحداثية حقلك (من خرائط جوجل أو Google Earth)",
-                          value=DEFAULT_COORD)
+                          key="coord_val")
+    st.caption("أو جرّب حقلًا جاهزًا بنقرة واحدة:")
+    pcols = st.columns(len(FARM_PRESETS))
+    for i, (label, c) in enumerate(FARM_PRESETS):
+        pcols[i].button(label, key=f"preset_{i}", use_container_width=True,
+                        on_click=_pick_coord, args=(c,))
     cb1, cb2 = st.columns(2)
     search = cb1.button("ابحث عن الموقع", type="primary", use_container_width=True)
+    if st.session_state.pop("_auto_search", False):
+        search = True
     try:
         _la, _lo = pc.parse_coord(coord)
         cb2.link_button("افتح في Google Earth", _ge_url(_la, _lo),

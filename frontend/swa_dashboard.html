@@ -124,6 +124,33 @@ html{scroll-behavior:smooth}
   border-radius:12px;padding:12px 18px;font-size:13px;font-weight:700;max-width:min(92vw,560px);
   line-height:1.7;text-align:center;z-index:60;opacity:0;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .3s}
 #toast.show{transform:translate(-50%,0);opacity:1}
+
+/* clickable field cards + detail modal */
+.fcard{cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
+.fcard:hover{transform:translateY(-2px);border-color:var(--green);box-shadow:var(--shadow)}
+.fcard .more{position:absolute;bottom:9px;inset-inline-start:9px;z-index:2;font-size:10px;font-weight:800;
+  color:#fff;background:rgba(0,0,0,.45);border-radius:999px;padding:2px 9px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:100}
+.modal.open{display:block}
+.sheet{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:min(560px,92%);
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);max-height:calc(100% - 44px);display:flex;flex-direction:column}
+.shead{position:relative;height:118px;background:#2a3a2a center/cover no-repeat;flex:none}
+.sscrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,12,.15),rgba(8,20,12,.78))}
+.sx{position:absolute;top:10px;left:10px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;
+  background:rgba(0,0,0,.5);color:#fff;font-size:15px;cursor:pointer;line-height:1}
+.stitle{position:absolute;bottom:11px;right:14px;left:14px;z-index:2;color:#fff}
+.stitle h3{font-size:18px;font-weight:800;margin-top:7px}
+.stitle .sloc{font-size:11.5px;opacity:.92;margin-top:2px}
+.sbody{padding:15px 18px 18px;overflow:auto}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px}
+.drow{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding-bottom:7px}
+.dk{font-size:12px;color:var(--muted);font-weight:600}
+.dv{font-size:13.5px;font-weight:800}
+.dv.hl{color:var(--green)} .dv.warn{color:var(--warn)}
+.ssub{grid-column:1/-1;font-size:11.5px;font-weight:800;color:var(--muted);margin-top:6px}
+.snote{font-size:11px;color:var(--muted);line-height:1.7;margin-top:14px}
+@media(max-width:520px){.dgrid{grid-template-columns:1fr}}
 </style>
 
 <div class="shell">
@@ -177,6 +204,8 @@ html{scroll-behavior:smooth}
   </main>
 </div>
 
+<div class="modal" id="modal" onclick="if(event.target===this)closeDetail()"></div>
+
 <script>
 // crop icons (no emoji)
 const leaf='<path d="M16 7 q4 -5 9 -3 q-2 5 -9 3 z" fill="#3f9e52"/><path d="M16 9 v-5" stroke="#3f9e52" stroke-width="1.6" fill="none"/>';
@@ -210,13 +239,14 @@ function kpis(){
    `<div class="kpi"><div class="k">${k[0]}</div><div class="v num">${k[1]}</div>${k[2]?`<div class="d ${k[3]}">${k[2]}</div>`:''}</div>`).join('');
 }
 function cards(){
-  document.getElementById('fgrid').innerHTML=FIELDS.map(f=>{
+  document.getElementById('fgrid').innerHTML=FIELDS.map((f,i)=>{
     const st=STc[f.status||'idle'];
     const applied=f.applied_m3||1, avoid=f.avoid_m3||0, pct=Math.round(avoid/applied*100)||0;
-    return `<div class="fcard">
+    return `<div class="fcard" data-i="${i}" title="اضغط لعرض التفاصيل">
       <div class="thumb" style="background-image:url(${f.thumb||''})"><div class="scrim"></div>
         <span class="cropbadge"><span class="ic">${ICON[f.crop]||''}</span>${f.crop_ar||''}</span>
-        <span class="sdot ${f.status||'idle'}"></span></div>
+        <span class="sdot ${f.status||'idle'}"></span>
+        <span class="more">التفاصيل</span></div>
       <div class="finfo">
         <div class="fname">${f.name}</div>
         <div class="fplace">${f.area} هـ · ${(+f.lat).toFixed(2)}, ${(+f.lon).toFixed(2)}</div>
@@ -315,4 +345,49 @@ if(_exp)_exp.addEventListener('click',()=>{
     catch(_){toast('تعذّر التصدير في هذه البيئة.');}
   }
 });
+
+// ---- per-field detail modal: everything SWA needs to monitor the field ----
+function _drow(k,v,cls){return `<div class="drow"><span class="dk">${k}</span><span class="dv ${cls||''}">${v}</span></div>`;}
+function openDetail(i){
+  const f=FIELDS[i]; if(!f) return;
+  const st=STc[f.status||'idle'];
+  const etcDay=(f.kc!=null&&f.et0!=null)?f.kc*f.et0:null;
+  const html=`<div class="sheet">
+    <div class="shead" style="background-image:url(${f.thumb||''})"><div class="sscrim"></div>
+      <button class="sx" onclick="closeDetail()" aria-label="إغلاق">✕</button>
+      <div class="stitle">
+        <span class="cropbadge"><span class="ic">${ICON[f.crop]||''}</span>${f.crop_ar||''}</span>
+        <h3>${f.name}</h3>
+        <div class="sloc">${f.area} هكتار · ${(+f.lat).toFixed(4)}, ${(+f.lon).toFixed(4)} · <span class="tag" style="background:var(${st[1]})">${st[0]}</span></div>
+      </div></div>
+    <div class="sbody"><div class="dgrid">
+      <div class="ssub">المؤشرات المقيسة (قمر صناعي)</div>
+      ${_drow('مؤشر الخضرة NDVI', f.ndvi??'—')}
+      ${_drow('نوع التربة', f.soil_ar||'—')}
+      ${_drow('غطاء نشِط', (f.active_pct??'—')+'٪')}
+      ${_drow('أرض فارغة', (f.idle_pct??'—')+'٪')}
+      ${_drow('مشهد القمر', f.scene||'—')}
+      ${_drow('ارتفاع الموقع', f.elev!=null?nf(f.elev)+' م':'—')}
+      <div class="ssub">المناخ والاحتياج (FAO‑56)</div>
+      ${_drow('ET₀ المرجعي', f.et0!=null?f.et0+' مم/يوم':'—')}
+      ${_drow('معامل المحصول Kc', f.kc??'—')}
+      ${_drow('ETc الاستهلاك', etcDay!=null?etcDay.toFixed(2)+' مم/يوم':'—')}
+      ${_drow('ETc أسبوعيًا', etcDay!=null?(etcDay*7).toFixed(0)+' مم':'—')}
+      ${_drow('الاحتياج الأسبوعي (الطلب)', nf(f.week_m3)+' م³','hl')}
+      ${_drow('الاستهلاك السنوي', nf(f.annual_m3)+' م³')}
+      <div class="ssub">الاستخدام والهدر (تقديري)</div>
+      ${_drow('الاستخدام الفعلي المقدَّر', nf(f.applied_m3)+' م³/أسبوع')}
+      ${_drow('الهدر القابل للتفادي', nf(f.avoid_m3)+' م³/أسبوع','warn')}
+      ${_drow('الري فوق الحاجة', (f.over_pct??'—')+'٪')}
+      ${_drow('كفاءة الري المفترضة', '50٪ → هدف 85٪')}
+    </div>
+    <div class="snote">NDVI من Sentinel‑2 وET₀ من NASA POWER (مقيسة). الاحتياج والاستهلاك (ETc) محسوبان وفق FAO‑56. «الاستخدام الفعلي» و«الهدر» تقديريان بكفاءة ريّ إرشادية بلا عدّاد ميداني.</div>
+    </div></div>`;
+  const m=document.getElementById('modal'); m.innerHTML=html; m.classList.add('open');
+}
+function closeDetail(){const m=document.getElementById('modal');m.classList.remove('open');m.innerHTML='';}
+document.getElementById('fgrid').addEventListener('click',e=>{
+  const c=e.target.closest('.fcard'); if(c)openDetail(+c.dataset.i);
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
 </script>
