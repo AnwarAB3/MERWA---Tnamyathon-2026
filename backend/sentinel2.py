@@ -19,7 +19,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageDraw
 
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 _DROP_SCL = (0, 1, 3, 8, 9, 10, 11)   # nodata/saturated/shadow/cloud/cirrus/snow
@@ -66,6 +66,32 @@ def _read_window(href, bbox_ll, out_shape=None, nearest=False):
                            resampling=Resampling.nearest if nearest else Resampling.bilinear,
                            boundless=True, fill_value=0)
     return data
+
+
+def _read_window_geo(href, bbox_ll):
+    """Like _read_window but also returns the window's affine transform and CRS,
+    so pixels can be measured in metres and reprojected to lat/lon."""
+    import rasterio
+    from rasterio.windows import from_bounds
+    from rasterio.warp import transform_bounds
+    from rasterio.enums import Resampling
+    with rasterio.Env(**_GDAL_HTTP):
+        with rasterio.open(href) as ds:
+            b = transform_bounds("EPSG:4326", ds.crs, *bbox_ll)
+            win = from_bounds(*b, transform=ds.transform)
+            h = max(1, int(round(win.height)))
+            w = max(1, int(round(win.width)))
+            data = ds.read(1, window=win, out_shape=(h, w),
+                           resampling=Resampling.bilinear,
+                           boundless=True, fill_value=0)
+            tr = ds.window_transform(win)
+            # account for the out_shape rescale (native win vs requested h/w)
+            from rasterio.transform import from_bounds as _fb
+            left, top = tr * (0, 0)
+            right, bottom = tr * (win.width, win.height)
+            tr = _fb(left, bottom, right, top, w, h)
+            crs = ds.crs
+    return data, tr, crs
 
 
 def _colorize_ndvi(ndvi, valid):
@@ -168,6 +194,189 @@ def _fetch_ndvi_once(lat: float, lon: float, half_deg: float = 0.012,
         ndvi_mean=round(float(vv.mean()), 3) if vv.size else float("nan"),
         classified_png=_classify(ndvi, valid),
         ndvi_png=_colorize_ndvi(ndvi, valid),
+    )
+
+
+# ----------------------------------------------------------------- field geometry (area + boundary from the scene)
+FIELD_GREEN = 0.30     # NDVI above this = cultivated / vegetated ground
+_PX_FALLBACK = 100.0   # m² per pixel if the transform is unavailable (10 m S2)
+
+
+@dataclass
+class FieldResult:
+    scene_date: str
+    cloud_cover: float
+    active_mean_ndvi: float
+    valid_fraction: float
+    ndvi_mean: float
+    classified_png: Image.Image
+    ndvi_png: Image.Image
+    # geometry measured from the scene
+    area_ha: float          # whole detected farm footprint
+    used_ha: float          # vegetated (cultivated) part
+    empty_ha: float         # bare / unused part inside the footprint
+    used_pct: int
+    empty_pct: int
+    overlay_datauri: str     # RGBA PNG of the footprint + outline, lat/lon aligned
+    overlay_bounds: list     # [[south, west], [north, east]] for the map
+
+
+def _component_at(mask, seed):
+    """Flood-fill the connected blob of `mask` that contains `seed` (or the
+    nearest True pixel to it). Isolates ONE farm from its neighbours."""
+    if mask.sum() == 0:
+        return np.zeros_like(mask)
+    H, W = mask.shape
+    r, c = seed
+    if not (0 <= r < H and 0 <= c < W) or not mask[r, c]:
+        ys, xs = np.where(mask)
+        i = int(((ys - r) ** 2 + (xs - c) ** 2).argmin())
+        r, c = int(ys[i]), int(xs[i])
+    img = Image.fromarray((mask * 255).astype("uint8")).copy()   # detach buffer so floodfill mutates in place
+    ImageDraw.floodfill(img, (c, r), 128, thresh=0)
+    return np.asarray(img) == 128
+
+
+def _fill_holes(mask):
+    """Fill bare patches enclosed by the farm so the footprint is solid."""
+    H, W = mask.shape
+    pad = np.pad(((~mask) * 255).astype("uint8"), 1, constant_values=255)
+    img = Image.fromarray(pad).copy()                      # detach buffer so floodfill mutates in place
+    ImageDraw.floodfill(img, (0, 0), 128, thresh=0)        # background from the border
+    reached = np.asarray(img)[1:H + 1, 1:W + 1] == 128
+    return mask | ((~mask) & (~reached))
+
+
+def _edge(mask, w=2):
+    k = 1 + 2 * w
+    er = np.asarray(Image.fromarray((mask * 255).astype("uint8"))
+                    .filter(ImageFilter.MinFilter(k))) > 127
+    return mask & (~er)
+
+
+def _make_overlay(footprint, src_tr, src_crs, bbox, out=512):
+    """Reproject the footprint mask to a lat/lon grid over bbox and paint it as
+    a translucent fill with a bright outline. Returns (data_uri, bounds)."""
+    import io, base64
+    from rasterio.warp import reproject
+    from rasterio.enums import Resampling
+    from rasterio.transform import from_bounds
+    w, s, e, n = bbox
+    dst = np.zeros((out, out), "uint8")
+    try:
+        reproject(source=footprint.astype("uint8"), destination=dst,
+                  src_transform=src_tr, src_crs=src_crs,
+                  dst_transform=from_bounds(w, s, e, n, out, out),
+                  dst_crs="EPSG:4326", resampling=Resampling.nearest)
+    except Exception:
+        return "", [[s, w], [n, e]]
+    fp = dst > 0
+    edge = _edge(fp, 3)
+    rgba = np.zeros((out, out, 4), np.uint8)
+    rgba[fp] = (120, 225, 255, 55)        # faint cyan tint — distinct from green crops
+    rgba[edge] = (255, 45, 70, 255)       # bold red boundary line
+    buf = io.BytesIO()
+    Image.fromarray(rgba, "RGBA").save(buf, "PNG")
+    uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return uri, [[s, w], [n, e]]
+
+
+def fetch_field(lat: float, lon: float, half_deg: float = 0.012,
+                months_back: int = 4, max_cloud: int = 35,
+                retries: int = 6) -> FieldResult | None:
+    """Measure the farm around (lat, lon) from a Sentinel-2 scene: area, used vs
+    empty ground, and a boundary overlay. Retries transient read failures."""
+    r = None
+    for _attempt in range(max(1, retries)):
+        r = _fetch_field_once(lat, lon, half_deg, months_back, max_cloud)
+        if r is not None and r.area_ha == r.area_ha and r.area_ha > 0:
+            return r
+    return r
+
+
+def _fetch_field_once(lat, lon, half_deg=0.012, months_back=4, max_cloud=35):
+    try:
+        import planetary_computer
+        from pystac_client import Client
+    except Exception:
+        return None
+    bbox = [lon - half_deg, lat - half_deg, lon + half_deg, lat + half_deg]
+    try:
+        cat = Client.open(STAC, modifier=planetary_computer.sign_inplace)
+        end = dt.date.today()
+        start = end - dt.timedelta(days=months_back * 31)
+        items = list(cat.search(collections=["sentinel-2-l2a"], bbox=bbox,
+                                datetime=f"{start}/{end}",
+                                query={"eo:cloud_cover": {"lt": max_cloud}}).items())
+        if not items:
+            items = list(cat.search(collections=["sentinel-2-l2a"], bbox=bbox,
+                                    datetime=f"{start}/{end}").items())
+        if not items:
+            return None
+        items.sort(key=lambda it: it.properties.get("eo:cloud_cover", 100))
+        item = items[0]
+    except Exception:
+        return None
+
+    try:
+        red, tr, crs = _read_window_geo(item.assets["B04"].href, bbox)
+        red = red.astype("float32")
+        nir = _read_window(item.assets["B08"].href, bbox, out_shape=red.shape).astype("float32")
+        scl = _read_window(item.assets["SCL"].href, bbox, out_shape=red.shape, nearest=True)
+    except Exception:
+        return None
+
+    baseline = str(item.properties.get("s2:processing_baseline", "04.00"))
+    try:
+        offset = -1000.0 if float(baseline) >= 4.0 else 0.0
+    except ValueError:
+        offset = -1000.0
+    nodata = (red <= 0)
+    red = np.maximum(red + offset, 1.0)
+    nir = np.maximum(nir + offset, 1.0)
+    ndvi = (nir - red) / (nir + red)
+
+    cloud = np.isin(scl, _DROP_SCL)
+    water = (scl == 6)
+    valid = (~cloud) & (~nodata)
+    veg = valid & (~water)
+
+    green = veg & (ndvi >= FIELD_GREEN)
+    H, W = ndvi.shape
+    farm = _component_at(_closing(green, 7), (H // 2, W // 2))
+    footprint = _fill_holes(farm)
+    if footprint.sum() < 25:
+        return None
+
+    used = footprint & green
+    fp_px = int(footprint.sum())
+    used_px = int(used.sum())
+    empty_px = fp_px - used_px
+    try:
+        px_m2 = abs(tr.a * tr.e)
+        if not (10.0 < px_m2 < 5000.0):
+            px_m2 = _PX_FALLBACK
+    except Exception:
+        px_m2 = _PX_FALLBACK
+
+    active = veg & (ndvi >= 0.45)
+    datauri, bounds = _make_overlay(footprint, tr, crs, bbox)
+    vv = ndvi[veg]
+    return FieldResult(
+        scene_date=item.datetime.date().isoformat(),
+        cloud_cover=float(item.properties.get("eo:cloud_cover", float("nan"))),
+        active_mean_ndvi=(round(float(ndvi[active].mean()), 3) if active.any()
+                          else round(float(ndvi[used].mean()), 3) if used.any() else float("nan")),
+        valid_fraction=round(float(valid.mean()), 3),
+        ndvi_mean=round(float(vv.mean()), 3) if vv.size else float("nan"),
+        classified_png=_classify(ndvi, valid),
+        ndvi_png=_colorize_ndvi(ndvi, valid),
+        area_ha=round(fp_px * px_m2 / 1e4, 1),
+        used_ha=round(used_px * px_m2 / 1e4, 1),
+        empty_ha=round(empty_px * px_m2 / 1e4, 1),
+        used_pct=int(round(used_px / fp_px * 100)),
+        empty_pct=int(round(empty_px / fp_px * 100)),
+        overlay_datauri=datauri, overlay_bounds=bounds,
     )
 
 

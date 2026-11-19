@@ -201,6 +201,13 @@ def get_s2(lat, lon):
         return None
 
 @st.cache_data(show_spinner=False)
+def get_field(lat, lon):
+    try:
+        return sentinel2.fetch_field(lat, lon)
+    except Exception:
+        return None
+
+@st.cache_data(show_spinner=False)
 def get_ts(lat, lon):
     try:
         return sentinel2.fetch_timeseries(lat, lon)
@@ -475,19 +482,58 @@ def landing():
             st.session_state.entry = "swa"; st.rerun()
 
 
+def _ge_url(lat, lon):
+    """Open the exact point in Google Earth (web), tilted view."""
+    return f"https://earth.google.com/web/@{lat},{lon},0a,1600d,35y,0h,0t,0r"
+
+
+def render_field_map(lat, lon, fld=None, height=380, key="fmap"):
+    """Satellite map at the farm. If fld is given, overlay its detected boundary."""
+    try:
+        import folium
+        from streamlit_folium import st_folium
+    except Exception:
+        if st.session_state.get("tc"):
+            st.image(st.session_state.tc, use_container_width=True)
+        return
+    m = folium.Map(location=[lat, lon], zoom_start=15, tiles=None, control_scale=True)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/"
+              "World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri World Imagery", name="قمر صناعي").add_to(m)
+    folium.Marker([lat, lon], tooltip="موقع الحقل").add_to(m)
+    if fld is not None and getattr(fld, "overlay_datauri", ""):
+        folium.raster_layers.ImageOverlay(
+            image=fld.overlay_datauri, bounds=fld.overlay_bounds,
+            opacity=0.9, interactive=False, cross_origin=False, zindex=1).add_to(m)
+        try:
+            m.fit_bounds(fld.overlay_bounds)
+        except Exception:
+            pass
+    st_folium(m, height=height, use_container_width=True,
+              returned_objects=[], key=key)
+
+
 def coordinate_flow():
     st.subheader("موقع الحقل")
-    col_in, col_area = st.columns([2, 1])
-    coord = col_in.text_input("أدخل إحداثية حقلك (من خرائط جوجل أو Google Earth)",
-                              value=DEFAULT_COORD)
-    area = col_area.number_input("مساحة المحور (هكتار)", 1.0, 2000.0, 50.0, 5.0)
-    if st.button("ابحث عن الموقع", type="primary", use_container_width=True):
+    coord = st.text_input("أدخل إحداثية حقلك (من خرائط جوجل أو Google Earth)",
+                          value=DEFAULT_COORD)
+    cb1, cb2 = st.columns(2)
+    search = cb1.button("ابحث عن الموقع", type="primary", use_container_width=True)
+    try:
+        _la, _lo = pc.parse_coord(coord)
+        cb2.link_button("افتح في Google Earth", _ge_url(_la, _lo),
+                        use_container_width=True)
+    except Exception:
+        cb2.button("افتح في Google Earth", disabled=True, use_container_width=True)
+
+    if search:
         try:
             lat, lon = pc.parse_coord(coord)
             with st.spinner("نحدّد الموقع ونسحب صورة القمر الصناعي…"):
                 place = pc.reverse_geocode(lat, lon)
                 tc, _ = pc.fetch_truecolor(lat, lon)
-            st.session_state.loc = dict(lat=lat, lon=lon, place=place, area=area)
+            st.session_state.loc = dict(lat=lat, lon=lon, place=place)
             st.session_state.tc = (lambda b: (tc.save(b, "JPEG"), b.getvalue())[1])(io.BytesIO()) if tc else None
             st.session_state.analyzed_coord = False
         except Exception as ex:
@@ -496,61 +542,64 @@ def coordinate_flow():
     if "loc" in st.session_state:
         loc = st.session_state.loc
         st.markdown("##### أكّد موقع الحقل")
-        cmap, cinfo = st.columns([1.2, 1])
-        with cmap:
-            try:
-                import folium
-                from streamlit_folium import st_folium
-                m = folium.Map(location=[loc["lat"], loc["lon"]], zoom_start=14,
-                               tiles=None, control_scale=True)
-                folium.TileLayer(
-                    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/"
-                          "World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                    attr="Esri").add_to(m)
-                folium.Marker([loc["lat"], loc["lon"]]).add_to(m)
-                folium.Circle([loc["lat"], loc["lon"]],
-                              radius=(loc["area"] * 10000 / 3.14159) ** 0.5,
-                              color="#ffcc00", fill=False).add_to(m)
-                st_folium(m, height=300, use_container_width=True)
-            except Exception:
-                if st.session_state.get("tc"):
-                    st.image(st.session_state.tc, use_container_width=True)
-        with cinfo:
-            st.markdown(f"**الموقع:** {loc['place']}")
-            st.markdown(f"**الإحداثية:** {loc['lat']:.5f}, {loc['lon']:.5f}")
-            if st.session_state.get("tc"):
-                st.image(st.session_state.tc, caption="الصورة المسحوبة تلقائيًا",
-                         use_container_width=True)
+        st.caption(f"{loc['place']} · {loc['lat']:.5f}, {loc['lon']:.5f}")
+        if not st.session_state.get("analyzed_coord"):
+            render_field_map(loc["lat"], loc["lon"], fld=None, height=360, key="m_confirm")
             if st.button("نعم، هذا حقلي — حلّله الآن", type="primary",
                          use_container_width=True):
                 st.session_state.analyzed_coord = True
+                st.rerun()
 
         if st.session_state.get("analyzed_coord"):
             soil, cid, kcb = soil_crop_controls("co_", loc["lat"], loc["lon"])
-            with st.spinner("نقرأ مؤشر NDVI من Sentinel‑2 والمناخ ونحسب الاحتياج…"):
+            with st.spinner("نقرأ مؤشر NDVI من Sentinel‑2 ونقيس مساحة الحقل وحدوده…"):
                 et = get_et0(loc["lat"], loc["lon"])
-                s2 = get_s2(loc["lat"], loc["lon"])
+                fld = get_field(loc["lat"], loc["lon"])
             ndvi_cls = ndvi_raw = None
-            if s2 is not None and s2.active_mean_ndvi == s2.active_mean_ndvi:
-                ndvi, idle_pct = float(s2.active_mean_ndvi), round(s2.idle_fraction * 100)
-                src = f"Sentinel‑2 خام B4/B8 — مشهد {s2.scene_date}، غيوم {s2.cloud_cover:.0f}%"
-                ndvi_cls, ndvi_raw = s2.classified_png, s2.ndvi_png
-                st.success(f"قرأنا مؤشر NDVI حقيقيًا من نطاقات Sentinel‑2 "
-                           f"(مشهد {s2.scene_date}، تغطية صافية {s2.valid_fraction*100:.0f}%).")
+            if fld is not None and fld.area_ha and fld.area_ha == fld.area_ha:
+                area_ha, idle_pct = fld.area_ha, fld.empty_pct
+                ndvi = fld.active_mean_ndvi
+                src = f"Sentinel‑2 خام B4/B8 — مشهد {fld.scene_date}"
+                ndvi_cls, ndvi_raw = fld.classified_png, fld.ndvi_png
+                st.markdown('<div class="rec"><div class="l">قياس الحقل من القمر الصناعي</div>'
+                            f'<div class="n">المساحة المقدَّرة ≈ {area_ha:g} هكتار · '
+                            f'المزروع {fld.used_pct}٪ · الفارغ {fld.empty_pct}٪</div></div>',
+                            unsafe_allow_html=True)
+                render_variables({
+                    "مساحة الحقل (مقيسة)": f"{area_ha:g} هكتار",
+                    "المساحة المزروعة": f"{fld.used_ha:g} هـ ({fld.used_pct}٪)",
+                    "الأرض الفارغة": f"{fld.empty_ha:g} هـ ({fld.empty_pct}٪)",
+                    "مشهد القمر": fld.scene_date,
+                })
+                render_field_map(loc["lat"], loc["lon"], fld=fld, height=420, key="m_result")
+                st.caption("الحدّ الأصفر على الخريطة هو حدود الحقل المكتشفة من مؤشر NDVI "
+                           "(Sentinel‑2، ~10م/بكسل). المساحة = بكسلات الحقل × مساحة البكسل؛ "
+                           "المزروع مقابل الفارغ من عتبة الخضرة داخل الحدّ.")
+                if area_ha > 150:
+                    st.info("هذه النقطة داخل منطقة زراعية متّصلة واسعة؛ الحدّ والمساحة يمثّلان "
+                            "الكتلة المزروعة المتّصلة حول النقطة، لا حقلاً مفردًا. حرّك الدبوس "
+                            "إلى حقلك المحدّد لقياس أدق.")
+                else:
+                    st.success(f"قِيست مساحة الحقل وحدوده من Sentinel‑2 "
+                               f"(مشهد {fld.scene_date}، تغطية صافية {fld.valid_fraction*100:.0f}٪).")
             else:
+                st.warning("تعذّر قياس الحقل من Sentinel‑2 الآن — أدخل مساحة الحقل يدويًا كبديل.")
+                area_ha = st.number_input("مساحة الحقل (هكتار)", 1.0, 2000.0, 20.0, 5.0,
+                                          key="co_area_fb")
                 ndvi, idle_pct, src = 0.58, 20, "تقدير من اللون الحقيقي — تعذّر سحب Sentinel‑2"
                 if st.session_state.get("tc"):
                     img = Image.open(io.BytesIO(st.session_state["tc"])).convert("RGB")
                     e, _a, idl = pc.vari_estimate(img)
                     ndvi, idle_pct = float(e), round(idl * 100)
-                st.warning("تعذّر سحب Sentinel‑2 الآن — عرضنا تقديرًا من اللون الحقيقي.")
-            rep = pc.build_report(loc["lat"], loc["lon"], loc["place"], loc["area"],
+                render_field_map(loc["lat"], loc["lon"], fld=None, height=360, key="m_fb")
+
+            rep = pc.build_report(loc["lat"], loc["lon"], loc["place"], area_ha,
                                   ndvi, src, idle_pct, et, kcb_max=kcb, soil=soil,
                                   current_crop_id=cid, month=MONTH)
             st.divider()
-            render_report(rep, loc["area"], soil, truecolor=st.session_state.get("tc"),
+            render_report(rep, area_ha, soil, truecolor=st.session_state.get("tc"),
                           ndvi_classified=ndvi_cls, ndvi_raw=ndvi_raw)
-            render_timeseries(loc["lat"], loc["lon"], loc["area"])
+            render_timeseries(loc["lat"], loc["lon"], area_ha)
 
 
 def upload_flow():
