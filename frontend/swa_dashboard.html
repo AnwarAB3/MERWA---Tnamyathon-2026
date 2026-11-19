@@ -27,7 +27,8 @@
   --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 34px rgba(0,0,0,.4); color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--fbody);direction:rtl;-webkit-font-smoothing:antialiased}
+html{background:#0e1712}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--fbody);direction:rtl;-webkit-font-smoothing:antialiased}
 h1,h2,h3{margin:0;text-wrap:balance}
 .num{font-family:var(--fdisplay);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .shell{display:grid;grid-template-columns:72px 1fr;min-height:100%}
@@ -251,9 +252,9 @@ function gw(){
 }
 function renderAll(){kpis();cards();bars();table();gw();}
 
-// theme
+// theme — default to dark so the dashboard matches the app shell
 function applyTheme(t){const r=document.documentElement;if(t)r.setAttribute('data-theme',t);else r.removeAttribute('data-theme');bars();}
-try{const s=localStorage.getItem('mirwa-theme');if(s)applyTheme(s);}catch(e){}
+let _t0='dark';try{const s=localStorage.getItem('mirwa-theme');if(s)_t0=s;}catch(e){}applyTheme(_t0);
 document.getElementById('themeBtn').addEventListener('click',()=>{
   const cur=document.documentElement.getAttribute('data-theme');
   const dark=cur?cur==='dark':matchMedia('(prefers-color-scheme:dark)').matches;

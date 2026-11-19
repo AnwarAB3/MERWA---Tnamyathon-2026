@@ -43,15 +43,19 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');
 :root{
-  --bg:#eef3ec; --surface:#ffffff; --surface-2:#f5f8f3; --ink:#15241b; --muted:#687a6e;
-  --line:#e2e9df; --green:#1f7a3f; --green-2:#2f9e55; --lime:#8fcf49; --sky:#2b7fd0;
-  --good:#2f9e55; --warn:#d98a2b; --crit:#cf4f45;
-  --shadow:0 1px 2px rgba(20,40,28,.04),0 10px 30px rgba(20,40,28,.06); --r:18px;
+  --bg:#0e1712; --surface:#15231a; --surface-2:#1a2a20; --ink:#e9f1e9; --muted:#9bb0a2;
+  --line:#243528; --green:#4bbf6e; --green-2:#5fcf7f; --lime:#9ad549; --sky:#5aa6e8;
+  --good:#5fcf7f; --warn:#e6a94a; --crit:#e06a60;
+  --hero-1:#123a22; --hero-2:#1f7a3f;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 34px rgba(0,0,0,.4); --r:18px;
   --fdisplay:"Space Grotesk","Cairo",system-ui,sans-serif;
   --fbody:"Cairo",system-ui,"Segoe UI",sans-serif;
 }
 html, body, [class*="css"], .stApp, button, input, textarea, select { font-family:var(--fbody) !important; }
 .stApp { direction: rtl; background:var(--bg); color:var(--ink); }
+[data-testid="stHeader"]{ background:transparent; }
+[data-testid="stSidebar"]{ background:var(--surface); }
+code, kbd{ background:var(--surface-2); color:var(--lime); }
 .block-container { padding-top: 1.3rem; max-width: 1180px; }
 h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
 .num,.var .v,.kpi .v,.rec .n{font-family:var(--fdisplay);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -72,8 +76,9 @@ h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
   width:100%; border-radius:999px; font-weight:800; font-size:15.5px; padding:12px 18px;
   border:1px solid var(--line); background:var(--surface); color:var(--green); transition:.15s; box-shadow:var(--shadow); }
 .stButton>button:hover{ border-color:var(--green); color:var(--green); }
-.stButton>button[kind="primary"]{ background:var(--green); color:#fff; border:0; }
-.stButton>button[kind="primary"]:hover{ background:#1a6a37; color:#fff; }
+.stButton>button[kind="primary"]{ background:linear-gradient(135deg,#2f9e55,#1f7a3f); color:#fff; border:0;
+  box-shadow:0 8px 22px rgba(31,122,63,.35); }
+.stButton>button[kind="primary"]:hover{ background:linear-gradient(135deg,#37b061,#248a47); color:#fff; }
 
 /* metrics -> KPI cards */
 [data-testid="stMetric"]{ background:var(--surface);border:1px solid var(--line);border-radius:16px;
@@ -85,10 +90,11 @@ h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
 [data-testid="stExpander"]{ border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--shadow); }
 
 /* hero */
-.head{background:linear-gradient(110deg,var(--green),var(--green-2));color:#fff;border-radius:var(--r);
-  padding:22px 26px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.head{background:linear-gradient(120deg,var(--hero-1),var(--hero-2));color:#fff;border-radius:var(--r);
+  padding:22px 26px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  border:1px solid rgba(143,207,73,.14)}
 .head:after{content:"";position:absolute;inset-inline-start:-40px;top:-60px;width:240px;height:240px;
-  border-radius:50%;background:rgba(255,255,255,.08)}
+  border-radius:50%;background:rgba(143,207,73,.10)}
 .head .hi{font-size:12.5px;font-weight:700;opacity:.9;letter-spacing:.02em}
 .head h1{margin:2px 0 0;font-size:30px;font-weight:900;font-family:var(--fdisplay)}
 .head p{margin:8px 0 0;font-size:14px;opacity:.94;font-weight:500;max-width:740px;line-height:1.8}
@@ -101,7 +107,7 @@ h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
 .choice p{margin:0 auto;font-size:13.5px;color:var(--muted);max-width:300px;text-align:center;line-height:1.8}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
-.rec{background:linear-gradient(110deg,var(--green),var(--green-2));color:#fff;border-radius:16px;padding:18px 22px;margin:4px 0 16px;box-shadow:var(--shadow)}
+.rec{background:linear-gradient(120deg,var(--hero-1),var(--hero-2));color:#fff;border-radius:16px;padding:18px 22px;margin:4px 0 16px;box-shadow:var(--shadow);border:1px solid rgba(143,207,73,.14)}
 .rec .l{font-size:13px;opacity:.9;font-weight:700}
 .rec .n{font-size:25px;font-weight:800;margin-top:6px;line-height:1.4}
 
@@ -171,7 +177,8 @@ h1,h2,h3,h4,p,span,div,label,li { text-align: right; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
+def render_hero():
+    st.markdown("""
 <div class="head">
   <div class="hi">تنمية‑ثون 2026 · المحور البيئي والاستدامة · منطقة مكة المكرمة</div>
   <h1>مِرواء</h1>
@@ -218,13 +225,13 @@ def classified_png(path):
     return Image.fromarray(out)
 
 
-ICON_PIN = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
+ICON_PIN = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#4bbf6e" '
             'stroke-width="1.7"><path d="M12 21c4-5 7-8.5 7-12a7 7 0 1 0-14 0c0 3.5 3 7 7 12z"/>'
             '<circle cx="12" cy="9" r="2.6"/></svg>')
-ICON_IMG = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
+ICON_IMG = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#4bbf6e" '
             'stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/>'
             '<circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>')
-ICON_GRID = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#1f7a3f" '
+ICON_GRID = ('<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#4bbf6e" '
              'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
              '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>'
              '<rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>')
@@ -614,13 +621,18 @@ def upload_flow():
 
 # ----------------------------------------------------------------- route
 if st.session_state.entry is None:
+    render_hero()
     landing()
 else:
-    if st.button("رجوع إلى البداية"):
+    back = st.columns([1, 5])[0]
+    if back.button("رجوع إلى البداية"):
         for k in ("loc", "tc", "analyzed_coord", "upload_result"):
             st.session_state.pop(k, None)
         st.session_state.entry = None
         st.rerun()
+    # the dashboard carries its own full header + rail, so skip the hero there
+    if st.session_state.entry != "swa":
+        render_hero()
     st.write("")
     {"coord": coordinate_flow, "upload": upload_flow, "swa": swa_flow}[st.session_state.entry]()
 
