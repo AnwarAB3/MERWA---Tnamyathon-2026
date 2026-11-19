@@ -115,15 +115,24 @@ h1,h2,h3{margin:0;text-wrap:balance}
   .rail{flex-direction:row;height:auto;width:100%;position:sticky;top:0;z-index:20;border-inline-start:0;border-bottom:1px solid var(--line);padding:10px 12px}
   .rail .logo{margin-bottom:0}
 }
+html{scroll-behavior:smooth}
+.nav{transition:background .15s,color .15s}
+.btn{transition:filter .15s,transform .05s}
+.btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+#toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-160%);
+  background:var(--surface);color:var(--ink);border:1px solid var(--green);box-shadow:var(--shadow);
+  border-radius:12px;padding:12px 18px;font-size:13px;font-weight:700;max-width:min(92vw,560px);
+  line-height:1.7;text-align:center;z-index:60;opacity:0;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .3s}
+#toast.show{transform:translate(-50%,0);opacity:1}
 </style>
 
 <div class="shell">
   <aside class="rail">
     <div class="logo">م</div>
-    <div class="nav active" title="المراقبة"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></div>
-    <div class="nav" title="الحقول"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20V9l7-5 7 5v11"/></svg></div>
-    <div class="nav" title="المياه"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></div>
-    <div class="nav" title="التقارير"><svg viewBox="0 0 24 24"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div>
+    <div class="nav active" title="المراقبة" data-scroll="top"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></div>
+    <div class="nav" title="الحقول" data-scroll="sec-fields"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20V9l7-5 7 5v11"/></svg></div>
+    <div class="nav" title="المياه" data-scroll="sec-water"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg></div>
+    <div class="nav" title="التقارير" data-scroll="sec-reports"><svg viewBox="0 0 24 24"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div>
     <div class="spacer"></div>
     <div class="nav" id="themeBtn" title="الوضع"><svg viewBox="0 0 24 24"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8z"/></svg></div>
   </aside>
@@ -136,20 +145,20 @@ h1,h2,h3{margin:0;text-wrap:balance}
       </div>
       <div class="pill">منطقة مكة المكرمة</div>
       <div class="spC"></div>
-      <button class="btn ghost"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> إضافة حقل</button>
-      <button class="btn primary"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg> تصدير التقرير</button>
+      <button class="btn ghost" id="addBtn"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> إضافة حقل</button>
+      <button class="btn primary" id="exportBtn"><svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg> تصدير التقرير</button>
     </header>
 
     <div class="kpis" id="kpis"></div>
 
     <div class="cols">
-      <section class="card"><div class="pad">
+      <section class="card" id="sec-fields"><div class="pad">
         <div class="ctitle"><div><h3>الحقول المراقَبة</h3>
           <span class="sub">كل حقل بمحصوله ومؤشراته — NDVI من Sentinel‑2، التربة من OpenLandMap</span></div></div>
         <div class="fgrid" id="fgrid"></div>
       </div></section>
 
-      <section class="card"><div class="pad">
+      <section class="card" id="sec-reports"><div class="pad">
         <div class="ctitle"><div><h3>الاستهلاك الأسبوعي حسب الحقل</h3>
           <span class="sub">م³/أسبوع · ETc محسوب</span></div></div>
         <svg id="bars" viewBox="0 0 400 260" role="img" aria-label="استهلاك المياه حسب الحقل"></svg>
@@ -158,7 +167,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
           <tbody id="tbody"></tbody></table>
       </div></section>
 
-      <section class="card gw"><div class="pad" id="gw"></div></section>
+      <section class="card gw" id="sec-water"><div class="pad" id="gw"></div></section>
     </div>
 
     <div class="foot">
@@ -261,4 +270,49 @@ document.getElementById('themeBtn').addEventListener('click',()=>{
   const next=dark?'light':'dark';try{localStorage.setItem('mirwa-theme',next);}catch(e){}applyTheme(next);});
 renderAll();
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(!document.documentElement.getAttribute('data-theme'))bars();});
+
+// ---- interactions: toast, rail navigation, add-field, export ----
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3200);
+}
+// rail: set active + smooth-scroll to the matching section
+document.querySelectorAll('.nav[data-scroll]').forEach(n=>{
+  n.addEventListener('click',()=>{
+    document.querySelectorAll('.nav[data-scroll]').forEach(x=>x.classList.remove('active'));
+    n.classList.add('active');
+    const t=n.getAttribute('data-scroll');
+    if(t==='top'){window.scrollTo({top:0,behavior:'smooth'});}
+    else{const el=document.getElementById(t);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+  });
+});
+// add field — honest guidance (fields are onboarded via the pipeline, not typed here)
+const _add=document.getElementById('addBtn');
+if(_add)_add.addEventListener('click',()=>toast('تُضاف الحقول من إحداثياتها عبر صفحة الإدخال في منصة مرواء، فتُحسب مؤشراتها من الأقمار الاصطناعية تلقائيًا.'));
+// export — download the real field data as CSV
+const _exp=document.getElementById('exportBtn');
+if(_exp)_exp.addEventListener('click',()=>{
+  const cols=[['الحقل','name'],['المحصول','crop_ar'],['المساحة (هكتار)','area'],['NDVI','ndvi'],
+    ['التربة','soil_ar'],['استهلاك أسبوعي (م³)','week_m3'],['استهلاك سنوي (م³)','annual_m3'],
+    ['مطبّق (م³)','applied_m3'],['قابل للتفادي (م³)','avoid_m3']];
+  const esc=v=>{v=(v==null?'':''+v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const lines=[cols.map(c=>esc(c[0])).join(',')]
+    .concat(FIELDS.map(f=>cols.map(c=>esc(f[c[1]])).join(',')));
+  const csv='﻿'+lines.join('\r\n');
+  try{
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='mirwa-swa-fields.csv';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast('تم تصدير تقرير الحقول ('+FIELDS.length+' حقول) بصيغة CSV.');
+  }catch(e){
+    // sandboxed iframe blocked the download — open the data in a new tab instead
+    try{window.open('data:text/csv;charset=utf-8,'+encodeURIComponent(csv),'_blank');
+      toast('فُتح التقرير في تبويب جديد — احفظه بصيغة CSV.');}
+    catch(_){toast('تعذّر التصدير في هذه البيئة.');}
+  }
+});
 </script>
