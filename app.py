@@ -304,10 +304,13 @@ def render_crop_list(area_ha, soil, month):
     st.markdown(f'<div class="cropgrid">{cards}</div>', unsafe_allow_html=True)
 
 
-def render_report(rep, area_ha, soil, truecolor=None, ndvi_classified=None, ndvi_raw=None):
+def render_report(rep, area_ha, soil, truecolor=None, ndvi_classified=None,
+                  ndvi_raw=None, key=""):
     s = rep.simple
-    msg = f"حالة الحقل: {s['status_ar']} — {rep.place}"
-    (st.error if s["status"] == "over" else st.success if s["status"] == "ok" else st.warning)(msg)
+    net_week = s["swa"]["consumptive_week"]          # the measured water DEMAND (m³/week)
+    applied = float(st.session_state.get(f"applied_{key}", 0.0) or 0.0)
+    _bn = {"over": st.error, "ok": st.success, "under": st.warning}.get(s["status"], st.info)
+    _bn(f"حالة الحقل: {s['status_ar']} — {rep.place}")
 
     tab_f, tab_w = st.tabs(["تقرير المزارع", "تقرير الهيئة السعودية للمياه"])
 
@@ -319,10 +322,28 @@ def render_report(rep, area_ha, soil, truecolor=None, ndvi_classified=None, ndvi
                     unsafe_allow_html=True)
         render_variables(s["variables"])
         render_crop_list(area_ha, soil, MONTH)
+        st.number_input(
+            "كم تسقي حقلك فعليًا هذا الأسبوع؟ (م³) — اختياري، لحساب الموفّر",
+            min_value=0.0, step=100.0, key=f"applied_{key}",
+            help="الاحتياج المائي أعلاه محسوب من القمر الصناعي. أدخل كمية ريّك الفعلية "
+                 "لنقارنها بالحاجة ونحسب كم يمكن أن توفّر.")
         c1, c2 = st.columns(2)
         with c1:
+            if applied > 0:
+                best = net_week / pc.BEST
+                avoid = max(0.0, applied - best)
+                over = max(0.0, applied - net_week)
+                over_txt = (f"تسقي فوق حاجة المحصول بـ ≈ {round(over):,} م³ "
+                            f"({over / applied * 100:.0f}٪). " if over > 0
+                            else "ريّك قريب من حاجة المحصول. ")
+                body = (f"تسقي ≈ {round(applied):,} م³/أسبوع والحاجة ≈ {net_week:,} م³. "
+                        f"{over_txt}بكفاءة ريّ 85٪ يكفي ≈ {round(best):,} م³، "
+                        f"فتوفّر ≈ {round(avoid):,} م³/أسبوع وتقلّل فاتورة الضخّ.")
+            else:
+                body = ("أدخل كمية ريّك الفعلية أعلاه لنحسب الموفّر. الاحتياج المائي "
+                        "محسوب بالفعل؛ الموفّر إضافة تعتمد على ريّك الفعلي.")
             st.markdown(f'<div class="card"><div class="t">توفير الماء والتكلفة</div>'
-                        f'<div class="v">{f["save"]}</div></div>', unsafe_allow_html=True)
+                        f'<div class="v">{body}</div></div>', unsafe_allow_html=True)
         with c2:
             st.markdown(f'<div class="card"><div class="t">أرض غير مستغلّة</div>'
                         f'<div class="v">{f["idle"]}</div></div>', unsafe_allow_html=True)
@@ -333,9 +354,17 @@ def render_report(rep, area_ha, soil, truecolor=None, ndvi_classified=None, ndvi
         w = s["swa"]
         m1, m2, m3 = st.columns(3)
         m1.metric("الاستهلاك الفعلي (ETc) أسبوعيًا", f"{w['consumptive_week']:,} م³")
-        m2.metric("هدر يمكن تفاديه أسبوعيًا", f"{w['avoidable_week_m3']:,} م³",
-                  f"-{w['avoidable_pct']:.0f}%")
-        m3.metric("الري فوق حاجة المحصول", f"{w['over_pct']:.0f}%")
+        if applied > 0:
+            best = net_week / pc.BEST
+            avoid = max(0.0, applied - best)
+            over = max(0.0, applied - net_week)
+            m2.metric("هدر يمكن تفاديه أسبوعيًا", f"{round(avoid):,} م³",
+                      f"-{avoid / applied * 100:.0f}%")
+            m3.metric("الري فوق حاجة المحصول", f"{over / applied * 100:.0f}%")
+        else:
+            m2.metric("هدر يمكن تفاديه أسبوعيًا", "—")
+            m3.metric("الري فوق حاجة المحصول", "—")
+            m2.caption("يُحسب بعد إدخال الريّ الفعلي في تبويب المزارع.")
         st.markdown(f'<div class="card"><div class="t">قراءة لإدارة المياه</div>'
                     f'<div class="v">الاستهلاك السنوي التقديري لهذا الحقل نحو '
                     f'<b>{w["consumptive_annual_est"]:,} م³</b> عند الري المتصل. '
@@ -598,7 +627,7 @@ def coordinate_flow():
                                   current_crop_id=cid, month=MONTH)
             st.divider()
             render_report(rep, area_ha, soil, truecolor=st.session_state.get("tc"),
-                          ndvi_classified=ndvi_cls, ndvi_raw=ndvi_raw)
+                          ndvi_classified=ndvi_cls, ndvi_raw=ndvi_raw, key="co")
             render_timeseries(loc["lat"], loc["lon"], area_ha)
 
 
@@ -664,7 +693,7 @@ def upload_flow():
         r = st.session_state.upload_result
         st.divider()
         render_report(r["rep"], r["area"], r["soil"], truecolor=r["tc"],
-                      ndvi_classified=r["cls"], ndvi_raw=r["raw"])
+                      ndvi_classified=r["cls"], ndvi_raw=r["raw"], key="up")
         render_timeseries(r["lat"], r["lon"], r["area"])
 
 

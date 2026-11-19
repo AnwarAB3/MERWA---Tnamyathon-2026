@@ -145,20 +145,11 @@ def build_report(lat, lon, place, area_ha, ndvi, ndvi_source, idle_pct,
     fw = fao56.etc(ndvi, et0, area_ha, pe_mm_week=0.0, kcb_full=kcb_max)  # engine
     net_m3 = fw.net_irrig_m3_week
     net_mm = fw.net_irrig_mm_week
-    applied_m3 = net_m3 / EFF                                # typical over-application
-    applied_best_m3 = net_m3 / BEST
-    avoid_m3 = applied_m3 - applied_best_m3
-    avoid_pct = (1 - EFF / BEST) * 100
-    over_pct = (applied_m3 - net_m3) / applied_m3 * 100      # share above crop need
     idle_ha = area_ha * idle_pct / 100.0
-
-    # status (traffic light) — farmers over-apply by design in the problem
-    if applied_m3 > net_m3 * 1.15:
-        status, status_ar = "over", "ريّ زائد عن حاجة المحصول"
-    elif applied_m3 < net_m3 * 0.9:
-        status, status_ar = "under", "ريّ أقل من الحاجة"
-    else:
-        status, status_ar = "ok", "الري مطابق للحاجة"
+    # The saved-water figure depends on the farmer's ACTUAL irrigation, entered in
+    # the UI — it is NOT assumed here. The engine returns the water demand only;
+    # the UI compares that demand against the farmer's real use to show savings.
+    status, status_ar = "demand", "تم حساب الاحتياج المائي"
 
     daily_m3 = net_m3 / 7.0
     annual_m3 = net_m3 * 52                                   # continuous-crop upper estimate
@@ -176,9 +167,6 @@ def build_report(lat, lon, place, area_ha, ndvi, ndvi_source, idle_pct,
         "farmer": {
             "headline": f"اسقِ هذا الأسبوع ≈ {round(net_m3):,} م³"
                         f"  (≈ {net_mm:.0f} مم عمق ريّ، ≈ {round(daily_m3):,} م³/يوم).",
-            "save": f"المعتاد في مثل هذه الحقول ≈ {round(applied_m3):,} م³/أسبوع؛ "
-                    f"بالالتزام بحاجة المحصول توفّر ≈ {round(avoid_m3):,} م³/أسبوع "
-                    f"وتقلّل فاتورة الضخّ.",
             "idle": f"≈ {idle_pct:.0f}٪ من حقلك ظاهر كأرض غير مزروعة/مراحة "
                     f"(≈ {idle_ha:.0f} هكتار) — فرصة لمحصول إضافي ضمن حدٍّ مائي.",
             "why": f"حُسبت الحاجة من خضرة المحصول (NDVI {ndvi:.2f}) ومناخ موقعك "
@@ -187,9 +175,7 @@ def build_report(lat, lon, place, area_ha, ndvi, ndvi_source, idle_pct,
         "swa": {
             "consumptive_week": round(net_m3),
             "consumptive_annual_est": round(annual_m3),
-            "avoidable_week_m3": round(avoid_m3),
-            "avoidable_pct": round(avoid_pct, 0),
-            "over_pct": round(over_pct, 0),
+            "best_practice_week": round(net_m3 / BEST),
             "note": "الاستهلاك الفعلي (ETc) لهذا الحقل قابل للتجميع إقليميًا لإدارة "
                     "السحب الجوفي. 90٪ من مياه الري في المملكة جوفية غير متجددة "
                     "(وزارة البيئة والمياه والزراعة).",
@@ -219,8 +205,8 @@ def build_report(lat, lon, place, area_ha, ndvi, ndvi_source, idle_pct,
             "Kc = Kcb + Ke(0.10)": f"{fw.kc:.3f}",
             "ETc = Kc × ET₀": f"{fw.kc:.3f} × {et0:.2f} = {fw.etc_mm_day:.2f} مم/يوم",
             "الاحتياج الأسبوعي": f"{fw.etc_mm_week:.1f} مم = {round(fw.weekly_demand_m3):,} م³",
-            "الهدر": f"المطبّق≈{round(applied_m3):,} − الاحتياج {round(net_m3):,} "
-                     f"(كفاءة {int(EFF*100)}٪→{int(BEST*100)}٪)",
+            "الموفّر": f"يُحسب من ريّك الفعلي مقابل الاحتياج {round(net_m3):,} م³ "
+                      f"وكفاءة الهدف {int(BEST*100)}٪ (≈ {round(net_m3/BEST):,} م³)",
         },
         "equations": [
             "NDVI = (B8 − B4) / (B8 + B4)",
